@@ -1,4 +1,4 @@
-# myCoursea Backend API Documentation
+# gleamLearn Backend API Documentation
 
 The official backend API specification and endpoint documentation for the **myCoursea** multi-track academic infrastructure platform. Built with **NestJS**, **TypeORM**, and **PostgreSQL**, this platform supports both Secondary (JSS/SSS) and University (100L–600L) academic structures, complete course catalogs, dynamic topic management, and student enrollments.
 
