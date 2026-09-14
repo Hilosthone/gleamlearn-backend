@@ -1,4 +1,4 @@
-// //src/app.controller
+// // src/app.controller.ts
 // import { Controller, Get } from '@nestjs/common';
 // import { AppService } from './app.service.js';
 
@@ -12,8 +12,6 @@
 //   }
 // }
 
-
-
 // src/app.controller.ts
 import { Controller, Get } from '@nestjs/common';
 import { AppService } from './app.service.js';
@@ -23,7 +21,13 @@ export class AppController {
   constructor(private readonly appService: AppService) {}
 
   @Get()
-  getHello(): string {
-    return this.appService.getHello();
+  getAppInfo() {
+    return {
+      product: 'GleamLearn',
+      status: 'active',
+      currentTime: new Date().toISOString(),
+      developer: 'Hilosthone',
+      documentation: '/api/docs',
+    };
   }
 }

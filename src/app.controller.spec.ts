@@ -1,3 +1,4 @@
+// src/app.controller.spec.ts
 import { Test, TestingModule } from '@nestjs/testing';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
@@ -15,8 +16,12 @@ describe('AppController', () => {
   });
 
   describe('root', () => {
-    it('should return "Hello World!"', () => {
-      expect(appController.getHello()).toBe('Hello World!');
+    it('should return service metadata containing GleamLearn and developer information', () => {
+      const result = appController.getAppInfo();
+      expect(result).toHaveProperty('product', 'GleamLearn');
+      expect(result).toHaveProperty('developer', 'Hilosthone');
+      expect(result).toHaveProperty('documentation', '/api/docs');
+      expect(result).toHaveProperty('currentTime');
     });
   });
 });
