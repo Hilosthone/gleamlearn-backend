@@ -79,6 +79,7 @@ import { AiModule } from './ai/ai.module.js';
 import { NotesModule } from './notes/notes.module.js';
 import { LessonsModule } from './lessons/lessons.module.js';
 import { FlashcardsModule } from './flashcards/flashcards.module.js';
+import { QuestionsModule } from './questions/questions.module.js';
 
 @Module({
   imports: [
@@ -123,6 +124,7 @@ import { FlashcardsModule } from './flashcards/flashcards.module.js';
     NotesModule,
     LessonsModule,
     FlashcardsModule,
+    QuestionsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
