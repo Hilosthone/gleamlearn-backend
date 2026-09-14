@@ -110,16 +110,50 @@
 //   getAllGeneratedContent(@Param('id') id: string) {
 //     return this.aiService.getAllGeneratedContent(id);
 //   }
+
+//   // =========================================================================
+//   // INTERACTIVE LIVE AI CLASS & EXPORT ENDPOINTS
+//   // =========================================================================
+
+//   @Post(':id/generate-live-class')
+//   @ApiOperation({ summary: 'Generate timeline script and visual canvas instructions for an interactive live AI class' })
+//   @ApiBody({ type: GenerateAiDto, required: false })
+//   generateLiveClass(
+//     @Param('id') id: string,
+//     @Body() dto?: GenerateAiDto,
+//   ) {
+//     return this.aiService.generateLiveClass(id, dto);
+//   }
+
+//   @Get(':id/live-class-stream')
+//   @ApiOperation({ summary: 'Stream playback sync metadata and session states for the interactive live class player' })
+//   getLiveClassStream(@Param('id') id: string) {
+//     return this.aiService.getLiveClassStream(id);
+//   }
+
+//   @Post(':id/export-pdf')
+//   @ApiOperation({ summary: 'Compile generated notes, class scripts, or summaries into a downloadable PDF document' })
+//   @ApiBody({ type: GenerateAiDto, required: false })
+//   exportPdf(
+//     @Param('id') id: string,
+//     @Body() dto?: GenerateAiDto,
+//   ) {
+//     return this.aiService.exportPdf(id, dto);
+//   }
 // }
 
 
 // src/ai/ai.controller.ts
-import { Controller, Get, Post, Param, Body } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBody } from '@nestjs/swagger';
+import { Controller, Get, Post, Param, Body, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
 import { AiService } from './ai.service.js';
 import { GenerateAiDto } from './dto/generate-ai.dto.js';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
+import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
 
 @ApiTags('AI Document Processing')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
 @Controller('api/v1/ai/documents')
 export class AiController {
   constructor(private readonly aiService: AiService) {}

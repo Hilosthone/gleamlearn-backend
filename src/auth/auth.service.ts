@@ -1,15 +1,118 @@
-//src/auth/auth.service.ts
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
+// //src/auth/auth.service.ts
+// import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
+// import { InjectRepository } from '@nestjs/typeorm';
+// import { Repository } from 'typeorm';
+// import { UserEntity } from '../users/users.entity.js';
+// import * as bcrypt from 'bcrypt';
+
+// @Injectable()
+// export class AuthService {
+//   constructor(
+//     @InjectRepository(UserEntity)
+//     private readonly userRepository: Repository<UserEntity>,
+//   ) {}
+
+//   async signup(signupDto: Record<string, any>) {
+//     const { email, username, password, confirmPassword, ...onboardingData } = signupDto;
+
+//     if (password !== confirmPassword) {
+//       throw new ConflictException('Passwords do not match');
+//     }
+
+//     const existingUser = await this.userRepository.findOne({
+//       where: [{ email }, { username }],
+//     });
+
+//     if (existingUser) {
+//       throw new ConflictException('Email or username is already registered');
+//     }
+
+//     const saltRounds = 10;
+//     const passwordHash = await bcrypt.hash(password, saltRounds);
+
+//     const newUser = this.userRepository.create({
+//       email,
+//       username,
+//       passwordHash,
+//       fullName: onboardingData.fullName,
+//       dateOfBirth: onboardingData.dateOfBirth,
+//       country: onboardingData.country,
+//       educationType: onboardingData.educationType,
+//       secondarySchool: onboardingData.secondarySchool,
+//       university: onboardingData.university,
+//       institution: onboardingData.institution,
+//       department: onboardingData.department,
+//       levelOrClass: onboardingData.levelOrClass,
+//       preferredLearningPace: onboardingData.preferredLearningPace,
+//       preferredStudyTime: onboardingData.preferredStudyTime,
+//       academicGoals: onboardingData.academicGoals,
+//     });
+
+//     const savedUser = await this.userRepository.save(newUser);
+//     const { passwordHash: _, ...result } = savedUser;
+
+//     return {
+//       message: 'Account created successfully. Please verify your email.',
+//       data: result,
+//     };
+//   }
+
+//   async login(loginDto: Record<string, any>) {
+//     return { message: 'User login endpoint active' };
+//   }
+
+//   async getMe(userId: string) {
+//     const user = await this.userRepository.findOne({ where: { id: userId } });
+//     if (!user) {
+//       throw new NotFoundException('User profile not found');
+//     }
+//     const { passwordHash: _, ...result } = user;
+//     return { data: result };
+//   }
+
+//   logout() {
+//     return { message: 'Successfully logged out' };
+//   }
+
+//   refreshToken(refreshToken: string) {
+//     return { message: 'Token refreshed successfully', accessToken: 'new-mock-jwt-token' };
+//   }
+
+//   verifyEmail(token: string) {
+//     return { message: 'Email verified successfully' };
+//   }
+
+//   resendVerification(email: string) {
+//     return { message: `Verification email resent to ${email}` };
+//   }
+
+//   forgotPassword(email: string) {
+//     return { message: `Password reset instructions sent to ${email}` };
+//   }
+
+//   resetPassword(body: Record<string, any>) {
+//     return { message: 'Password has been reset successfully' };
+//   }
+
+//   changePassword(body: Record<string, any>) {
+//     return { message: 'Password changed successfully' };
+//   }
+// }
+
+// src/auth/auth.service.ts
+import { Injectable, ConflictException, NotFoundException, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { UserEntity } from '../users/users.entity.js';
+import { User } from './entities/user.entity.js'; 
+import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class AuthService {
   constructor(
-    @InjectRepository(UserEntity)
-    private readonly userRepository: Repository<UserEntity>,
+    @InjectRepository(User) // <-- FIXED: Inject User repository
+    private readonly userRepository: Repository<User>,
+    private readonly jwtService: JwtService,
   ) {}
 
   async signup(signupDto: Record<string, any>) {
@@ -39,26 +142,53 @@ export class AuthService {
       country: onboardingData.country,
       educationType: onboardingData.educationType,
       secondarySchool: onboardingData.secondarySchool,
+      secondaryClass: onboardingData.secondaryClass,
+      secondaryStream: onboardingData.secondaryStream,
       university: onboardingData.university,
-      institution: onboardingData.institution,
+      faculty: onboardingData.faculty,
       department: onboardingData.department,
-      levelOrClass: onboardingData.levelOrClass,
-      preferredLearningPace: onboardingData.preferredLearningPace,
+      courseOfStudy: onboardingData.courseOfStudy,
+      level: onboardingData.level,
+      examAimOrGoals: onboardingData.examAimOrGoals,
       preferredStudyTime: onboardingData.preferredStudyTime,
-      academicGoals: onboardingData.academicGoals,
     });
 
     const savedUser = await this.userRepository.save(newUser);
     const { passwordHash: _, ...result } = savedUser;
 
+    const payload = { sub: savedUser.id, email: savedUser.email, username: savedUser.username };
+    const accessToken = this.jwtService.sign(payload);
+
     return {
       message: 'Account created successfully. Please verify your email.',
+      accessToken,
       data: result,
     };
   }
 
   async login(loginDto: Record<string, any>) {
-    return { message: 'User login endpoint active' };
+    const { email, password } = loginDto;
+
+    const user = await this.userRepository.findOne({ where: { email } });
+    if (!user) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
+    const payload = { sub: user.id, email: user.email, username: user.username };
+    const accessToken = this.jwtService.sign(payload);
+
+    const { passwordHash: _, ...result } = user;
+
+    return {
+      message: 'Successfully logged in',
+      accessToken,
+      data: result,
+    };
   }
 
   async getMe(userId: string) {
@@ -68,6 +198,45 @@ export class AuthService {
     }
     const { passwordHash: _, ...result } = user;
     return { data: result };
+  }
+
+  async updateMe(userId: string, updateDto: Record<string, any>) {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User profile not found');
+    }
+
+    Object.assign(user, updateDto);
+    const updatedUser = await this.userRepository.save(user);
+    const { passwordHash: _, ...result } = updatedUser;
+
+    return {
+      message: 'Profile updated successfully',
+      data: result,
+    };
+  }
+
+  async changePassword(userId: string, body: Record<string, any>) {
+    const { oldPassword, newPassword, confirmNewPassword } = body;
+
+    if (newPassword !== confirmNewPassword) {
+      throw new BadRequestException('New passwords do not match');
+    }
+
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const isMatch = await bcrypt.compare(oldPassword, user.passwordHash);
+    if (!isMatch) {
+      throw new UnauthorizedException('Incorrect old password');
+    }
+
+    user.passwordHash = await bcrypt.hash(newPassword, 10);
+    await this.userRepository.save(user);
+
+    return { message: 'Password changed successfully' };
   }
 
   logout() {
@@ -92,9 +261,5 @@ export class AuthService {
 
   resetPassword(body: Record<string, any>) {
     return { message: 'Password has been reset successfully' };
-  }
-
-  changePassword(body: Record<string, any>) {
-    return { message: 'Password changed successfully' };
   }
 }

@@ -1,7 +1,10 @@
-// //src/library/library.controller.ts
-// import { Controller, Get, Post, Delete, Param, Query } from '@nestjs/common';
-// import { ApiTags, ApiOperation } from '@nestjs/swagger';
+
+
+// // src/library/library.controller.ts
+// import { Controller, Get, Post, Delete, Param, Body, Query } from '@nestjs/common';
+// import { ApiTags, ApiOperation, ApiBody, ApiQuery } from '@nestjs/swagger';
 // import { LibraryService } from './library.service.js';
+// import { AddFavoriteDto } from './dto/add-favorite.dto.js';
 
 // @ApiTags('Student Library')
 // @Controller('api/v1/library')
@@ -46,100 +49,112 @@
 //   }
 
 //   @Post('courses/:courseId')
+//   @ApiOperation({ summary: 'Save a course to the student library' })
 //   saveCourse(@Param('courseId') courseId: string) {
 //     return this.libraryService.saveCourse('current-user-id-placeholder', courseId);
 //   }
 
 //   @Delete('courses/:courseId')
+//   @ApiOperation({ summary: 'Remove a saved course from the library' })
 //   removeSavedCourse(@Param('courseId') courseId: string) {
 //     return this.libraryService.removeSavedCourse('current-user-id-placeholder', courseId);
 //   }
 
 //   @Post('favorites/:id')
-//   addFavorite(@Param('id') id: string, @Query('type') type: string = 'MATERIAL') {
-//     return this.libraryService.addFavorite('current-user-id-placeholder', id, type);
+//   @ApiOperation({ summary: 'Add an item to library favorites' })
+//   @ApiBody({ type: AddFavoriteDto })
+//   addFavorite(
+//     @Param('id') id: string, 
+//     @Body() dto: AddFavoriteDto // Using DTO body payload instead of loose query strings for strict validation
+//   ) {
+//     return this.libraryService.addFavorite('current-user-id-placeholder', id, dto.type);
 //   }
 
 //   @Delete('favorites/:id')
+//   @ApiOperation({ summary: 'Remove an item from library favorites' })
 //   removeFavorite(@Param('id') id: string) {
 //     return this.libraryService.removeFavorite('current-user-id-placeholder', id);
 //   }
 // }
 
-
 // src/library/library.controller.ts
-import { Controller, Get, Post, Delete, Param, Body, Query } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBody, ApiQuery } from '@nestjs/swagger';
+import { Controller, Get, Post, Delete, Param, Body, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
 import { LibraryService } from './library.service.js';
 import { AddFavoriteDto } from './dto/add-favorite.dto.js';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
+import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
 
 @ApiTags('Student Library')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
 @Controller('api/v1/library')
 export class LibraryController {
   constructor(private readonly libraryService: LibraryService) {}
 
   @Get()
   @ApiOperation({ summary: 'Get summary overview of student library items' })
-  getLibrarySummary() {
-    return this.libraryService.getLibrarySummary('current-user-id-placeholder');
+  getLibrarySummary(@CurrentUser('id') userId: string) {
+    return this.libraryService.getLibrarySummary(userId);
   }
 
   @Get('courses')
   @ApiOperation({ summary: 'Get all saved courses in student library' })
-  getSavedCourses() {
-    return this.libraryService.getSavedCourses('current-user-id-placeholder');
+  getSavedCourses(@CurrentUser('id') userId: string) {
+    return this.libraryService.getSavedCourses(userId);
   }
 
   @Get('topics')
-  getTopics() {
-    return this.libraryService.getLibraryItemsByType('current-user-id-placeholder', 'TOPIC');
+  getTopics(@CurrentUser('id') userId: string) {
+    return this.libraryService.getLibraryItemsByType(userId, 'TOPIC');
   }
 
   @Get('materials')
-  getMaterials() {
-    return this.libraryService.getLibraryItemsByType('current-user-id-placeholder', 'MATERIAL');
+  getMaterials(@CurrentUser('id') userId: string) {
+    return this.libraryService.getLibraryItemsByType(userId, 'MATERIAL');
   }
 
   @Get('quizzes')
-  getQuizzes() {
-    return this.libraryService.getLibraryItemsByType('current-user-id-placeholder', 'QUIZ');
+  getQuizzes(@CurrentUser('id') userId: string) {
+    return this.libraryService.getLibraryItemsByType(userId, 'QUIZ');
   }
 
   @Get('tests')
-  getTests() {
-    return this.libraryService.getLibraryItemsByType('current-user-id-placeholder', 'TEST');
+  getTests(@CurrentUser('id') userId: string) {
+    return this.libraryService.getLibraryItemsByType(userId, 'TEST');
   }
 
   @Get('exams')
-  getExams() {
-    return this.libraryService.getLibraryItemsByType('current-user-id-placeholder', 'EXAM');
+  getExams(@CurrentUser('id') userId: string) {
+    return this.libraryService.getLibraryItemsByType(userId, 'EXAM');
   }
 
   @Post('courses/:courseId')
   @ApiOperation({ summary: 'Save a course to the student library' })
-  saveCourse(@Param('courseId') courseId: string) {
-    return this.libraryService.saveCourse('current-user-id-placeholder', courseId);
+  saveCourse(@CurrentUser('id') userId: string, @Param('courseId') courseId: string) {
+    return this.libraryService.saveCourse(userId, courseId);
   }
 
   @Delete('courses/:courseId')
   @ApiOperation({ summary: 'Remove a saved course from the library' })
-  removeSavedCourse(@Param('courseId') courseId: string) {
-    return this.libraryService.removeSavedCourse('current-user-id-placeholder', courseId);
+  removeSavedCourse(@CurrentUser('id') userId: string, @Param('courseId') courseId: string) {
+    return this.libraryService.removeSavedCourse(userId, courseId);
   }
 
   @Post('favorites/:id')
   @ApiOperation({ summary: 'Add an item to library favorites' })
   @ApiBody({ type: AddFavoriteDto })
   addFavorite(
+    @CurrentUser('id') userId: string,
     @Param('id') id: string, 
-    @Body() dto: AddFavoriteDto // Using DTO body payload instead of loose query strings for strict validation
+    @Body() dto: AddFavoriteDto
   ) {
-    return this.libraryService.addFavorite('current-user-id-placeholder', id, dto.type);
+    return this.libraryService.addFavorite(userId, id, dto.type);
   }
 
   @Delete('favorites/:id')
   @ApiOperation({ summary: 'Remove an item from library favorites' })
-  removeFavorite(@Param('id') id: string) {
-    return this.libraryService.removeFavorite('current-user-id-placeholder', id);
+  removeFavorite(@CurrentUser('id') userId: string, @Param('id') id: string) {
+    return this.libraryService.removeFavorite(userId, id);
   }
 }

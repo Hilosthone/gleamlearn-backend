@@ -22,7 +22,7 @@
 //       useFactory: (configService: ConfigService) => {
 //         const databaseUrl = configService.get<string>('DATABASE_URL');
 
-//         if (databaseUrl) {
+//         if (databaseUrl && databaseUrl.includes('supabase.co')) {
 //           return {
 //             type: 'postgres' as const,
 //             url: databaseUrl,
@@ -30,7 +30,7 @@
 //             autoLoadEntities: true, 
 //             synchronize: true,
 //             ssl: {
-//               rejectUnauthorized: false, // Required for Supabase cloud connections
+//               rejectUnauthorized: false, // Required strictly for Supabase cloud
 //             },
 //           };
 //         }
@@ -45,9 +45,7 @@
 //           entities: [User],
 //           autoLoadEntities: true,
 //           synchronize: true,
-//           ssl: {
-//             rejectUnauthorized: false,
-//           },
+//           // No SSL property here for local PostgreSQL
 //         };
 //       },
 //     }),
@@ -65,7 +63,6 @@
 // export class AppModule {}
 
 
-
 // src/app.module.ts
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -79,7 +76,9 @@ import { CoursesModule } from './courses/courses.module.js';
 import { LibraryModule } from './library/library.module.js';
 import { FilesModule } from './files/files.module.js';
 import { AiModule } from './ai/ai.module.js';
-import { User } from './auth/entities/user.entity.js';
+import { NotesModule } from './notes/notes.module.js';
+import { LessonsModule } from './lessons/lessons.module.js';
+import { FlashcardsModule } from './flashcards/flashcards.module.js';
 
 @Module({
   imports: [
@@ -94,11 +93,10 @@ import { User } from './auth/entities/user.entity.js';
           return {
             type: 'postgres' as const,
             url: databaseUrl,
-            entities: [User],
             autoLoadEntities: true, 
             synchronize: true,
             ssl: {
-              rejectUnauthorized: false, // Required strictly for Supabase cloud
+              rejectUnauthorized: false,
             },
           };
         }
@@ -110,10 +108,8 @@ import { User } from './auth/entities/user.entity.js';
           username: configService.get<string>('DATABASE_USER', 'postgres'),
           password: configService.get<string>('DATABASE_PASSWORD', 'postgres'),
           database: configService.get<string>('DATABASE_NAME', 'mycoursea_db'),
-          entities: [User],
           autoLoadEntities: true,
           synchronize: true,
-          // No SSL property here for local PostgreSQL
         };
       },
     }),
@@ -124,6 +120,9 @@ import { User } from './auth/entities/user.entity.js';
     LibraryModule,
     FilesModule,
     AiModule,
+    NotesModule,
+    LessonsModule,
+    FlashcardsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
