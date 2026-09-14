@@ -10,8 +10,8 @@ async function bootstrap() {
 
   // Swagger API Documentation Setup
   const config = new DocumentBuilder()
-    .setTitle('myCoursea API Documentation')
-    .setDescription('The official backend API documentation for myCoursea platform covering Authentication, User Profiles, Academic Structure, and Course Catalog Management')
+    .setTitle('gleamlearn API Documentation')
+    .setDescription('The official backend API documentation for gleamlearn platform covering Authentication, User Profiles, Academic Structure, and Course Catalog Management')
     .setVersion('1.0')
     .addBearerAuth()
     .build();
