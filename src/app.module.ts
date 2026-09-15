@@ -80,6 +80,8 @@ import { NotesModule } from './notes/notes.module.js';
 import { LessonsModule } from './lessons/lessons.module.js';
 import { FlashcardsModule } from './flashcards/flashcards.module.js';
 import { QuestionsModule } from './questions/questions.module.js';
+import {QuizzesModule} from './quizzes/quizzes.module.js';
+import { TestsModule } from './tests/tests.module.js';
 
 @Module({
   imports: [
@@ -125,6 +127,8 @@ import { QuestionsModule } from './questions/questions.module.js';
     LessonsModule,
     FlashcardsModule,
     QuestionsModule,
+    QuizzesModule,
+    TestsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
