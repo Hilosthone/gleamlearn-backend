@@ -82,6 +82,14 @@ import { FlashcardsModule } from './flashcards/flashcards.module.js';
 import { QuestionsModule } from './questions/questions.module.js';
 import {QuizzesModule} from './quizzes/quizzes.module.js';
 import { TestsModule } from './tests/tests.module.js';
+import { ExamsModule } from './exams/exams.module.js';
+import { ExamPrepModule } from './exam-prep/exam-prep.module.js';
+import { AnalyticsModule } from './analytics/analytics.module.js';
+import { ProgressModule } from './progress/progress.module.js';
+import { GoalsModule } from './goals/goals.module.js';
+import { PlannerModule } from './planner/planner.module.js';
+import { StudySessionsModule } from './study-sessions/study-sessions.module.js';
+import { StreakModule } from './streak/streak.module.js';
 
 @Module({
   imports: [
@@ -129,6 +137,14 @@ import { TestsModule } from './tests/tests.module.js';
     QuestionsModule,
     QuizzesModule,
     TestsModule,
+    ExamsModule,
+    ExamPrepModule,
+    AnalyticsModule,
+    ProgressModule,
+    GoalsModule,
+    PlannerModule,
+    StudySessionsModule,
+    StreakModule,
   ],
   controllers: [AppController],
   providers: [AppService],
