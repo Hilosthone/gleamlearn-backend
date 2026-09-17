@@ -1,20 +1,5 @@
-// import { Module } from '@nestjs/common';
-// import { TypeOrmModule } from '@nestjs/typeorm';
-// import { AuthController } from './auth.controller.js';
-// import { AuthService } from './auth.service.js';
-// import { UserEntity } from '../users/users.entity.js';
-
-// @Module({
-//   imports: [TypeOrmModule.forFeature([UserEntity])],
-//   controllers: [AuthController],
-//   providers: [AuthService],
-//   exports: [AuthService],
-// })
-// export class AuthModule {}
-
-
 // // src/auth/auth.module.ts
-// import { Module } from '@nestjs/common';
+// import { Module, Global } from '@nestjs/common'; // <-- Import Global
 // import { TypeOrmModule } from '@nestjs/typeorm';
 // import { JwtModule } from '@nestjs/jwt';
 // import { PassportModule } from '@nestjs/passport';
@@ -24,6 +9,7 @@
 // import { User } from './entities/user.entity.js';
 // import { JwtStrategy } from './strategies/jwt.strategy.js';
 
+// @Global() // <-- Makes AuthModule available globally across all modules
 // @Module({
 //   imports: [
 //     TypeOrmModule.forFeature([User]),
@@ -45,10 +31,8 @@
 // })
 // export class AuthModule {}
 
-
-
 // src/auth/auth.module.ts
-import { Module, Global } from '@nestjs/common'; // <-- Import Global
+import { Module, Global } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
@@ -57,8 +41,9 @@ import { AuthService } from './auth.service.js';
 import { AuthController } from './auth.controller.js';
 import { User } from './entities/user.entity.js';
 import { JwtStrategy } from './strategies/jwt.strategy.js';
+import { MailModule } from '../mail/mail.module.js'; // <-- 1. Import MailModule
 
-@Global() // <-- Makes AuthModule available globally across all modules
+@Global()
 @Module({
   imports: [
     TypeOrmModule.forFeature([User]),
@@ -73,9 +58,10 @@ import { JwtStrategy } from './strategies/jwt.strategy.js';
         },
       }),
     }),
+    MailModule, // <-- 2. Add MailModule here to fix the unknown dependency error
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy],
-  exports: [JwtStrategy, PassportModule, JwtModule],
+  exports: [JwtStrategy, PassportModule, JwtModule, MailModule], // Optional: export MailModule if other modules need it via AuthModule
 })
 export class AuthModule {}

@@ -11,7 +11,20 @@
 // import { LibraryModule } from './library/library.module.js';
 // import { FilesModule } from './files/files.module.js';
 // import { AiModule } from './ai/ai.module.js';
-// import { User } from './auth/entities/user.entity.js';
+// import { NotesModule } from './notes/notes.module.js';
+// import { LessonsModule } from './lessons/lessons.module.js';
+// import { FlashcardsModule } from './flashcards/flashcards.module.js';
+// import { QuestionsModule } from './questions/questions.module.js';
+// import {QuizzesModule} from './quizzes/quizzes.module.js';
+// import { TestsModule } from './tests/tests.module.js';
+// import { ExamsModule } from './exams/exams.module.js';
+// import { ExamPrepModule } from './exam-prep/exam-prep.module.js';
+// import { AnalyticsModule } from './analytics/analytics.module.js';
+// import { ProgressModule } from './progress/progress.module.js';
+// import { GoalsModule } from './goals/goals.module.js';
+// import { PlannerModule } from './planner/planner.module.js';
+// import { StudySessionsModule } from './study-sessions/study-sessions.module.js';
+// import { StreakModule } from './streak/streak.module.js';
 
 // @Module({
 //   imports: [
@@ -26,11 +39,10 @@
 //           return {
 //             type: 'postgres' as const,
 //             url: databaseUrl,
-//             entities: [User],
 //             autoLoadEntities: true, 
 //             synchronize: true,
 //             ssl: {
-//               rejectUnauthorized: false, // Required strictly for Supabase cloud
+//               rejectUnauthorized: false,
 //             },
 //           };
 //         }
@@ -42,10 +54,8 @@
 //           username: configService.get<string>('DATABASE_USER', 'postgres'),
 //           password: configService.get<string>('DATABASE_PASSWORD', 'postgres'),
 //           database: configService.get<string>('DATABASE_NAME', 'mycoursea_db'),
-//           entities: [User],
 //           autoLoadEntities: true,
 //           synchronize: true,
-//           // No SSL property here for local PostgreSQL
 //         };
 //       },
 //     }),
@@ -56,11 +66,26 @@
 //     LibraryModule,
 //     FilesModule,
 //     AiModule,
+//     NotesModule,
+//     LessonsModule,
+//     FlashcardsModule,
+//     QuestionsModule,
+//     QuizzesModule,
+//     TestsModule,
+//     ExamsModule,
+//     ExamPrepModule,
+//     AnalyticsModule,
+//     ProgressModule,
+//     GoalsModule,
+//     PlannerModule,
+//     StudySessionsModule,
+//     StreakModule,
 //   ],
 //   controllers: [AppController],
 //   providers: [AppService],
 // })
 // export class AppModule {}
+
 
 
 // src/app.module.ts
@@ -69,6 +94,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
+import { MailModule } from './mail/mail.module.js'; // <-- Import MailModule
 import { AuthModule } from './auth/auth.module.js';
 import { UsersModule } from './users/users.module.js';
 import { AcademicModule } from './academic/academic.module.js'; 
@@ -124,6 +150,7 @@ import { StreakModule } from './streak/streak.module.js';
         };
       },
     }),
+    MailModule, // <-- Register MailModule here
     AuthModule,
     UsersModule,
     AcademicModule,
