@@ -89,12 +89,20 @@
 
 
 // src/quizzes/quizzes.controller.ts
-import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { Request } from 'express';
 import { QuizzesService } from './quizzes.service.js';
 import { CreateQuizDto } from './dto/create-quiz.dto.js';
 import { SubmitQuizDto } from './dto/submit-quiz.dto.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
+
+interface RequestWithUser extends Request {
+  user: {
+    id: string;
+    email: string;
+  };
+}
 
 @ApiTags('Quizzes System')
 @ApiBearerAuth()
@@ -222,12 +230,17 @@ export class QuizzesController {
   @Post(':id/submit')
   @ApiOperation({
     summary: 'Submit a quiz attempt',
-    description: 'Submit student answers for a quiz attempt, evaluate performance, and calculate overall score.'
+    description: 'Submit student answers for a quiz attempt, evaluate performance, calculate overall score, and trigger server-side XP and Coin rewards.'
   })
-  @ApiResponse({ status: 200, description: 'Quiz attempt submitted and graded successfully.' })
+  @ApiResponse({ status: 200, description: 'Quiz attempt submitted, graded, XP, and Coins awarded successfully.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  submitAttempt(@Param('id') id: string, @Body() submitQuizDto: SubmitQuizDto) {
-    return this.quizzesService.submitAttempt(id, submitQuizDto);
+  submitAttempt(
+    @Param('id') id: string, 
+    @Req() req: RequestWithUser, 
+    @Body() submitQuizDto: SubmitQuizDto
+  ) {
+    // Passes the authenticated user's ID, the quiz ID, and the answers payload
+    return this.quizzesService.submitAttempt(req.user.id, id, submitQuizDto);
   }
 
   @Get(':id/results')

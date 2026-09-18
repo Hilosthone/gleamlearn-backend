@@ -116,6 +116,9 @@ import { GoalsModule } from './goals/goals.module.js';
 import { PlannerModule } from './planner/planner.module.js';
 import { StudySessionsModule } from './study-sessions/study-sessions.module.js';
 import { StreakModule } from './streak/streak.module.js';
+import { XpModule } from './xp/xp.module.js';
+import { CoinsModule } from './coins/coins.module.js';
+import { GamificationModule } from './gamification/gamification.module.js';
 
 @Module({
   imports: [
@@ -172,6 +175,9 @@ import { StreakModule } from './streak/streak.module.js';
     PlannerModule,
     StudySessionsModule,
     StreakModule,
+    XpModule,
+    CoinsModule,
+    GamificationModule,
   ],
   controllers: [AppController],
   providers: [AppService],
