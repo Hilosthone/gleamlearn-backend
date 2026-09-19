@@ -119,6 +119,13 @@ import { StreakModule } from './streak/streak.module.js';
 import { XpModule } from './xp/xp.module.js';
 import { CoinsModule } from './coins/coins.module.js';
 import { GamificationModule } from './gamification/gamification.module.js';
+import { LeaderboardsModule } from './leaderboards/leaderboards.module.js';
+import { PersonalAiModule } from './personal-ai/personal-ai.module.js';
+import { PersonalAiCompanionModule } from './personal-ai-companion/personal-ai-companion.module.js';
+import { AiTutorModule } from './ai-tutor/ai_tutor_module.js';
+import { AiVoiceModule } from './ai-voice/ai-voice.module.js';
+import { RecommendationsModule } from './recommendations/recommendations.module.js';
+import { NotificationsModule } from './notifications/notifications.module.js';
 
 @Module({
   imports: [
@@ -178,6 +185,13 @@ import { GamificationModule } from './gamification/gamification.module.js';
     XpModule,
     CoinsModule,
     GamificationModule,
+    LeaderboardsModule,
+    PersonalAiModule,
+    PersonalAiCompanionModule,
+    AiTutorModule,
+    AiVoiceModule,
+    RecommendationsModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
