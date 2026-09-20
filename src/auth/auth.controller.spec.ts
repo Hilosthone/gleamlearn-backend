@@ -43,7 +43,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AuthController } from './auth.controller.js';
 import { AuthService } from './auth.service.js';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { UserEntity } from '../users/users.entity.js';
+// import { UserEntity } from '../users/users.entity.js';
+import { User } from '../users/users.entity.js';
 
 describe('AuthController', () => {
   let controller: AuthController;
@@ -54,7 +55,7 @@ describe('AuthController', () => {
       providers: [
         AuthService,
         {
-          provide: getRepositoryToken(UserEntity),
+          provide: getRepositoryToken(User),
           useValue: {
             findOne: () => {},
             create: () => {},
