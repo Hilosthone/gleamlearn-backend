@@ -1,26 +1,4 @@
 {
-  "name": "gleamlearn-backend",
-  "version": "0.0.1",
-  "description": "",
-  "author": "",
-  "private": true,
-  "license": "UNLICENSED",
-  "type": "module",
-  "scripts": {
-    "build": "npx prisma contract emit && nest build",
-    "deploy": "nest deploy",
-    "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
-    "start": "nest start",
-    "start:dev": "nest start --watch",
-    "start:debug": "nest start --debug --watch",
-    "start:prod": "node dist/main",
-    "lint": "oxlint src/ test/",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:cov": "vitest run --coverage",
-    "test:debug": "vitest --inspect-brk --no-file-parallelism",
-    "test:e2e": "vitest run --config ./vitest.config.e2e.ts"
-  },
   "dependencies": {
     "@jest/globals": "^30.5.1",
     "@nestjs/cli": "^12.0.0",
@@ -34,6 +12,7 @@
     "@nestjs/swagger": "^12.0.1",
     "@nestjs/typeorm": "^12.0.1",
     "@prisma/orm-postgres": "^8.0.0-rc.11",
+    "@prisma/config": "^7.10.0",
     "@types/bcrypt": "^6.0.0",
     "@types/express": "^5.0.0",
     "@types/multer": "^2.2.0",
@@ -48,6 +27,7 @@
     "oxlint": "^1.58.0",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
+    "prisma": "^8.0.0-rc.15",
     "pg": "^8.23.0",
     "prettier": "^3.4.2",
     "reflect-metadata": "^0.2.2",
@@ -64,9 +44,7 @@
     "@nestjs/mau": "^0.2.6",
     "@nestjs/schematics": "^12.0.0",
     "@nestjs/testing": "^12.0.1",
-    "@prisma/config": "^7.10.0",
     "@types/nodemailer": "^8.0.1",
-    "@types/supertest": "^7.2.1",
-    "prisma": "^8.0.0-rc.15"
+    "@types/supertest": "^7.2.1"
   }
 }
