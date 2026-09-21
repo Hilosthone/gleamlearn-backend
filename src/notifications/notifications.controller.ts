@@ -61,7 +61,7 @@
 
 
 // src/notifications/notifications.controller.ts
-import { Controller, Get, Patch, Delete, Param, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get,Post, Patch, Delete, Param, Body, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
 import { NotificationsService } from './notifications.service.js';
@@ -132,5 +132,27 @@ export class NotificationsController {
   @ApiResponse({ status: 200, description: 'Notification settings updated successfully.' })
   updateSettings(@CurrentUser() user: any, @Body() dto: UpdateNotificationSettingsDto) {
     return this.notificationsService.updateSettings(user.id, dto);
+  }
+
+  // --- Push Token Registration Endpoints ---
+
+  @Throttle({ short: { limit: 2, ttl: 2000 }, long: { limit: 20, ttl: 60000 } })
+  @Post('token')
+  @ApiOperation({ summary: 'Register or update device push token for mobile/web notifications' })
+  @ApiResponse({ status: 201, description: 'Push token registered successfully.' })
+  registerPushToken(
+    @CurrentUser() user: any, 
+    @Body('token') token: string, 
+    @Body('provider') provider?: string
+  ) {
+    return this.notificationsService.registerPushToken(user.id, token, provider);
+  }
+
+  @Throttle({ short: { limit: 2, ttl: 2000 }, long: { limit: 20, ttl: 60000 } })
+  @Delete('token')
+  @ApiOperation({ summary: 'Remove push token on user logout' })
+  @ApiResponse({ status: 200, description: 'Push token removed successfully.' })
+  removePushToken(@Body('token') token: string) {
+    return this.notificationsService.removePushToken(token);
   }
 }

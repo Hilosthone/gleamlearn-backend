@@ -4,14 +4,16 @@
 // import { Repository } from 'typeorm';
 // import { User } from './entities/user.entity.js'; 
 // import { JwtService } from '@nestjs/jwt';
+// import { MailService } from '../mail/mail.service.js'; // <-- 1. Import MailService
 // import * as bcrypt from 'bcrypt';
 
 // @Injectable()
 // export class AuthService {
 //   constructor(
-//     @InjectRepository(User) // <-- FIXED: Inject User repository
+//     @InjectRepository(User)
 //     private readonly userRepository: Repository<User>,
 //     private readonly jwtService: JwtService,
+//     private readonly mailService: MailService, // <-- 2. Inject MailService here
 //   ) {}
 
 //   async signup(signupDto: Record<string, any>) {
@@ -55,11 +57,19 @@
 //     const savedUser = await this.userRepository.save(newUser);
 //     const { passwordHash: _, ...result } = savedUser;
 
+//     // Generate login token
 //     const payload = { sub: savedUser.id, email: savedUser.email, username: savedUser.username };
 //     const accessToken = this.jwtService.sign(payload);
 
+//     // 3. Generate a secure verification token (expires in 1 day) and send the email
+//     const verificationToken = this.jwtService.sign(
+//       { email: savedUser.email }, 
+//       { expiresIn: '1d' }
+//     );
+//     await this.mailService.sendVerificationEmail(savedUser.email, verificationToken);
+
 //     return {
-//       message: 'Account created successfully. Please verify your email.',
+//       message: 'Account created successfully. Please check your email to verify your account.',
 //       accessToken,
 //       data: result,
 //     };
@@ -146,20 +156,70 @@
 //     return { message: 'Token refreshed successfully', accessToken: 'new-mock-jwt-token' };
 //   }
 
-//   verifyEmail(token: string) {
-//     return { message: 'Email verified successfully' };
+//   async verifyEmail(token: string) {
+//     try {
+//       // 4. Decode and verify the email token
+//       const payload = this.jwtService.verify(token);
+//       const user = await this.userRepository.findOne({ where: { email: payload.email } });
+      
+//       if (!user) {
+//         throw new NotFoundException('User not found');
+//       }
+
+//       // Optional: Mark user as verified if you have an isVerified column
+//       // user.isVerified = true;
+//       // await this.userRepository.save(user);
+
+//       return { message: 'Email verified successfully' };
+//     } catch (error) {
+//       throw new BadRequestException('Invalid or expired verification token');
+//     }
 //   }
 
-//   resendVerification(email: string) {
+//   async resendVerification(email: string) {
+//     const user = await this.userRepository.findOne({ where: { email } });
+//     if (user) {
+//       const verificationToken = this.jwtService.sign({ email }, { expiresIn: '1d' });
+//       await this.mailService.sendVerificationEmail(email, verificationToken);
+//     }
 //     return { message: `Verification email resent to ${email}` };
 //   }
 
-//   forgotPassword(email: string) {
+//   async forgotPassword(email: string) {
+//     const user = await this.userRepository.findOne({ where: { email } });
+    
+//     // To prevent user enumeration attacks, we return success even if email doesn't exist,
+//     // but we only send the email if the user actually exists.
+//     if (user) {
+//       const resetToken = this.jwtService.sign({ email: user.email }, { expiresIn: '15m' });
+//       await this.mailService.sendPasswordResetEmail(user.email, resetToken);
+//     }
+
 //     return { message: `Password reset instructions sent to ${email}` };
 //   }
 
-//   resetPassword(body: Record<string, any>) {
-//     return { message: 'Password has been reset successfully' };
+//   async resetPassword(body: Record<string, any>) {
+//     const { token, newPassword, confirmNewPassword } = body;
+
+//     if (newPassword !== confirmNewPassword) {
+//       throw new BadRequestException('New passwords do not match');
+//     }
+
+//     try {
+//       const payload = this.jwtService.verify(token);
+//       const user = await this.userRepository.findOne({ where: { email: payload.email } });
+
+//       if (!user) {
+//         throw new NotFoundException('User not found');
+//       }
+
+//       user.passwordHash = await bcrypt.hash(newPassword, 10);
+//       await this.userRepository.save(user);
+
+//       return { message: 'Password has been reset successfully' };
+//     } catch (error) {
+//       throw new BadRequestException('Invalid or expired password reset token');
+//     }
 //   }
 // }
 
@@ -174,7 +234,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './entities/user.entity.js'; 
 import { JwtService } from '@nestjs/jwt';
-import { MailService } from '../mail/mail.service.js'; // <-- 1. Import MailService
+import { MailService } from '../mail/mail.service.js'; 
+import { NotificationsService } from '../notifications/notifications.service.js'; // <-- 1. Import NotificationsService
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
@@ -183,7 +244,8 @@ export class AuthService {
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     private readonly jwtService: JwtService,
-    private readonly mailService: MailService, // <-- 2. Inject MailService here
+    private readonly mailService: MailService,
+    private readonly notificationsService: NotificationsService, // <-- 2. Inject NotificationsService here
   ) {}
 
   async signup(signupDto: Record<string, any>) {
@@ -237,6 +299,14 @@ export class AuthService {
       { expiresIn: '1d' }
     );
     await this.mailService.sendVerificationEmail(savedUser.email, verificationToken);
+
+    // 4. Trigger dual-layer welcome notification (saves to DB inbox & fires FCM push)
+    await this.notificationsService.createAndPushNotification(
+      savedUser.id,
+      'Welcome to GleamLearn! 🚀',
+      'Your account has been created successfully. Explore your dashboard to get started with your learning journey.',
+      'account'
+    );
 
     return {
       message: 'Account created successfully. Please check your email to verify your account.',
@@ -328,17 +398,12 @@ export class AuthService {
 
   async verifyEmail(token: string) {
     try {
-      // 4. Decode and verify the email token
       const payload = this.jwtService.verify(token);
       const user = await this.userRepository.findOne({ where: { email: payload.email } });
       
       if (!user) {
         throw new NotFoundException('User not found');
       }
-
-      // Optional: Mark user as verified if you have an isVerified column
-      // user.isVerified = true;
-      // await this.userRepository.save(user);
 
       return { message: 'Email verified successfully' };
     } catch (error) {
@@ -358,8 +423,6 @@ export class AuthService {
   async forgotPassword(email: string) {
     const user = await this.userRepository.findOne({ where: { email } });
     
-    // To prevent user enumeration attacks, we return success even if email doesn't exist,
-    // but we only send the email if the user actually exists.
     if (user) {
       const resetToken = this.jwtService.sign({ email: user.email }, { expiresIn: '15m' });
       await this.mailService.sendPasswordResetEmail(user.email, resetToken);
