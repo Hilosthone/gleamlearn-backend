@@ -112,6 +112,136 @@
 //   }
 // }
 
+// // src/users/users.controller.ts
+// import { 
+//   Controller, 
+//   Get, 
+//   Patch, 
+//   Delete, 
+//   Post, 
+//   Body, 
+//   Param, 
+//   UseGuards 
+// } from '@nestjs/common';
+// import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+// import { UsersService } from './users.service.js';
+// import { UpdateUserDto, UpdateAcademicProfileDto, UpdatePreferencesDto } from './dto/update-user.dto.js';
+// import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
+// import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
+
+// @ApiTags('Users & Profile')
+// @ApiBearerAuth()
+// @Controller('api/v1/users')
+// export class UsersController {
+//   constructor(private readonly usersService: UsersService) {}
+
+//   // ==========================================
+//   // AUTHENTICATED USER PRIVATE ROUTES (/me)
+//   // ==========================================
+
+//   @Get('me')
+//   @UseGuards(JwtAuthGuard)
+//   @ApiOperation({ summary: 'Get current authenticated user profile' })
+//   @ApiResponse({ status: 200, description: 'Profile retrieved successfully.' })
+//   getProfile(@CurrentUser('id') userId: string) {
+//     return this.usersService.getProfile(userId);
+//   }
+
+//   @Patch('me')
+//   @UseGuards(JwtAuthGuard)
+//   @ApiOperation({ summary: 'Update basic authenticated user details' })
+//   updateProfile(@CurrentUser('id') userId: string, @Body() updateDto: UpdateUserDto) {
+//     return this.usersService.updateProfile(userId, updateDto);
+//   }
+
+//   @Delete('me')
+//   @UseGuards(JwtAuthGuard)
+//   @ApiOperation({ summary: 'Soft delete current user account (marks as deleted in backend)' })
+//   deleteAccount(@CurrentUser('id') userId: string) {
+//     return this.usersService.softDeleteAccount(userId);
+//   }
+
+//   @Post('me/freeze')
+//   @UseGuards(JwtAuthGuard)
+//   @ApiOperation({ summary: 'Freeze current user account temporarily' })
+//   freezeAccount(@CurrentUser('id') userId: string) {
+//     return this.usersService.freezeAccount(userId);
+//   }
+
+//   @Post('me/unfreeze')
+//   @UseGuards(JwtAuthGuard)
+//   @ApiOperation({ summary: 'Unfreeze current user account' })
+//   unfreezeAccount(@CurrentUser('id') userId: string) {
+//     return this.usersService.unfreezeAccount(userId);
+//   }
+
+//   @Post('me/profile-picture')
+//   @UseGuards(JwtAuthGuard)
+//   @ApiOperation({ summary: 'Upload or update profile picture' })
+//   uploadProfilePicture(@CurrentUser('id') userId: string, @Body() body: { imageUrl: string }) {
+//     return this.usersService.updateProfilePicture(userId, body.imageUrl);
+//   }
+
+//   @Delete('me/profile-picture')
+//   @UseGuards(JwtAuthGuard)
+//   @ApiOperation({ summary: 'Remove profile picture' })
+//   removeProfilePicture(@CurrentUser('id') userId: string) {
+//     return this.usersService.removeProfilePicture(userId);
+//   }
+
+//   @Patch('me/academic-profile')
+//   @UseGuards(JwtAuthGuard)
+//   @ApiOperation({ summary: 'Update academic profile (Secondary or University details)' })
+//   updateAcademicProfile(@CurrentUser('id') userId: string, @Body() academicDto: UpdateAcademicProfileDto) {
+//     return this.usersService.updateAcademicProfile(userId, academicDto);
+//   }
+
+//   @Patch('me/preferences')
+//   @UseGuards(JwtAuthGuard)
+//   @ApiOperation({ summary: 'Update learning preferences and study times' })
+//   updatePreferences(@CurrentUser('id') userId: string, @Body() prefsDto: UpdatePreferencesDto) {
+//     return this.usersService.updatePreferences(userId, prefsDto);
+//   }
+
+//   @Patch('me/notification-preferences')
+//   @UseGuards(JwtAuthGuard)
+//   @ApiOperation({ summary: 'Update push/email notification settings' })
+//   updateNotifications(@CurrentUser('id') userId: string, @Body() notifDto: Record<string, any>) {
+//     return this.usersService.updateNotificationPreferences(userId, notifDto);
+//   }
+
+//   @Patch('me/privacy-settings')
+//   @UseGuards(JwtAuthGuard)
+//   @ApiOperation({ summary: 'Update profile visibility and privacy controls' })
+//   updatePrivacy(@CurrentUser('id') userId: string, @Body() privacyDto: Record<string, any>) {
+//     return this.usersService.updatePrivacySettings(userId, privacyDto);
+//   }
+
+//   // ==========================================
+//   // PUBLIC PROFILE & DISCOVERY ROUTES
+//   // ==========================================
+
+//   @Get(':username')
+//   @ApiOperation({ summary: 'Get public profile details by username' })
+//   getPublicProfile(@Param('username') username: string) {
+//     return this.usersService.getPublicProfile(username);
+//   }
+
+//   @Get(':username/achievements')
+//   @ApiOperation({ summary: 'Get unlocked badges and achievements for a user' })
+//   getUserAchievements(@Param('username') username: string) {
+//     return this.usersService.getUserAchievements(username);
+//   }
+
+//   @Get(':username/stats')
+//   @ApiOperation({ summary: 'Get learning stats, streak counts, and activity metrics' })
+//   getUserStats(@Param('username') username: string) {
+//     return this.usersService.getUserStats(username);
+//   }
+// }
+
+
+
 // src/users/users.controller.ts
 import { 
   Controller, 
@@ -123,6 +253,7 @@ import {
   Param, 
   UseGuards 
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { UsersService } from './users.service.js';
 import { UpdateUserDto, UpdateAcademicProfileDto, UpdatePreferencesDto } from './dto/update-user.dto.js';
@@ -147,6 +278,7 @@ export class UsersController {
     return this.usersService.getProfile(userId);
   }
 
+  @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 15, ttl: 60000 } })
   @Patch('me')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Update basic authenticated user details' })
@@ -154,6 +286,7 @@ export class UsersController {
     return this.usersService.updateProfile(userId, updateDto);
   }
 
+  @Throttle({ short: { limit: 1, ttl: 5000 }, long: { limit: 5, ttl: 60000 } })
   @Delete('me')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Soft delete current user account (marks as deleted in backend)' })
@@ -161,6 +294,7 @@ export class UsersController {
     return this.usersService.softDeleteAccount(userId);
   }
 
+  @Throttle({ short: { limit: 1, ttl: 5000 }, long: { limit: 5, ttl: 60000 } })
   @Post('me/freeze')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Freeze current user account temporarily' })
@@ -168,6 +302,7 @@ export class UsersController {
     return this.usersService.freezeAccount(userId);
   }
 
+  @Throttle({ short: { limit: 1, ttl: 5000 }, long: { limit: 5, ttl: 60000 } })
   @Post('me/unfreeze')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Unfreeze current user account' })
@@ -175,6 +310,7 @@ export class UsersController {
     return this.usersService.unfreezeAccount(userId);
   }
 
+  @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 10, ttl: 60000 } })
   @Post('me/profile-picture')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Upload or update profile picture' })
@@ -182,6 +318,7 @@ export class UsersController {
     return this.usersService.updateProfilePicture(userId, body.imageUrl);
   }
 
+  @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 10, ttl: 60000 } })
   @Delete('me/profile-picture')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Remove profile picture' })
@@ -189,6 +326,7 @@ export class UsersController {
     return this.usersService.removeProfilePicture(userId);
   }
 
+  @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 15, ttl: 60000 } })
   @Patch('me/academic-profile')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Update academic profile (Secondary or University details)' })
@@ -196,6 +334,7 @@ export class UsersController {
     return this.usersService.updateAcademicProfile(userId, academicDto);
   }
 
+  @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 15, ttl: 60000 } })
   @Patch('me/preferences')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Update learning preferences and study times' })
@@ -203,6 +342,7 @@ export class UsersController {
     return this.usersService.updatePreferences(userId, prefsDto);
   }
 
+  @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 15, ttl: 60000 } })
   @Patch('me/notification-preferences')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Update push/email notification settings' })
@@ -210,6 +350,7 @@ export class UsersController {
     return this.usersService.updateNotificationPreferences(userId, notifDto);
   }
 
+  @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 15, ttl: 60000 } })
   @Patch('me/privacy-settings')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Update profile visibility and privacy controls' })
@@ -221,18 +362,21 @@ export class UsersController {
   // PUBLIC PROFILE & DISCOVERY ROUTES
   // ==========================================
 
+  @Throttle({ short: { limit: 2, ttl: 2000 }, long: { limit: 30, ttl: 60000 } })
   @Get(':username')
   @ApiOperation({ summary: 'Get public profile details by username' })
   getPublicProfile(@Param('username') username: string) {
     return this.usersService.getPublicProfile(username);
   }
 
+  @Throttle({ short: { limit: 2, ttl: 2000 }, long: { limit: 30, ttl: 60000 } })
   @Get(':username/achievements')
   @ApiOperation({ summary: 'Get unlocked badges and achievements for a user' })
   getUserAchievements(@Param('username') username: string) {
     return this.usersService.getUserAchievements(username);
   }
 
+  @Throttle({ short: { limit: 2, ttl: 2000 }, long: { limit: 30, ttl: 60000 } })
   @Get(':username/stats')
   @ApiOperation({ summary: 'Get learning stats, streak counts, and activity metrics' })
   getUserStats(@Param('username') username: string) {

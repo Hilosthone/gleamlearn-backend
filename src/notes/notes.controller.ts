@@ -42,8 +42,55 @@
 // }
 
 
+// // src/notes/notes.controller.ts
+// import { Controller, Get, Post, Patch, Delete, Param, Body, UseGuards } from '@nestjs/common';
+// import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+// import { NotesService } from './notes.service.js';
+// import { CreateNoteDto } from './dto/create-note.dto.js';
+// import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
+// import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
+
+// @ApiTags('Notes & Learning Materials')
+// @ApiBearerAuth()
+// @UseGuards(JwtAuthGuard)
+// @Controller('api/v1/notes')
+// export class NotesController {
+//   constructor(private readonly notesService: NotesService) {}
+
+//   @Get()
+//   @ApiOperation({ summary: 'Retrieve all study notes for the authenticated user' })
+//   findAll(@CurrentUser('id') userId: string) {
+//     return this.notesService.findAll(userId);
+//   }
+
+//   @Get(':id')
+//   @ApiOperation({ summary: 'Retrieve a single study note by ID' })
+//   findOne(@Param('id') id: string, @CurrentUser('id') userId: string) {
+//     return this.notesService.findOne(id, userId);
+//   }
+
+//   @Post()
+//   @ApiOperation({ summary: 'Create a new study note' })
+//   create(@CurrentUser('id') userId: string, @Body() dto: CreateNoteDto) {
+//     return this.notesService.create(userId, dto);
+//   }
+
+//   @Patch(':id')
+//   @ApiOperation({ summary: 'Update an existing study note' })
+//   update(@Param('id') id: string, @CurrentUser('id') userId: string, @Body() dto: Partial<CreateNoteDto>) {
+//     return this.notesService.update(id, userId, dto);
+//   }
+
+//   @Delete(':id')
+//   @ApiOperation({ summary: 'Delete a study note' })
+//   remove(@Param('id') id: string, @CurrentUser('id') userId: string) {
+//     return this.notesService.remove(id, userId);
+//   }
+// }
+
 // src/notes/notes.controller.ts
 import { Controller, Get, Post, Patch, Delete, Param, Body, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { NotesService } from './notes.service.js';
 import { CreateNoteDto } from './dto/create-note.dto.js';
@@ -69,18 +116,21 @@ export class NotesController {
     return this.notesService.findOne(id, userId);
   }
 
+  @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 10, ttl: 60000 } })
   @Post()
   @ApiOperation({ summary: 'Create a new study note' })
   create(@CurrentUser('id') userId: string, @Body() dto: CreateNoteDto) {
     return this.notesService.create(userId, dto);
   }
 
+  @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 10, ttl: 60000 } })
   @Patch(':id')
   @ApiOperation({ summary: 'Update an existing study note' })
   update(@Param('id') id: string, @CurrentUser('id') userId: string, @Body() dto: Partial<CreateNoteDto>) {
     return this.notesService.update(id, userId, dto);
   }
 
+  @Throttle({ short: { limit: 1, ttl: 5000 }, long: { limit: 5, ttl: 60000 } })
   @Delete(':id')
   @ApiOperation({ summary: 'Delete a study note' })
   remove(@Param('id') id: string, @CurrentUser('id') userId: string) {
