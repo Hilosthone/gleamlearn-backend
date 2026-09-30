@@ -64,7 +64,7 @@ import { NotificationsModule } from '../notifications/notifications.module.js'; 
       }),
     }),
     MailModule, 
-    NotificationsModule, // <-- 2. Add NotificationsModule here so NestJS resolves it in AuthService
+    NotificationsModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy],
