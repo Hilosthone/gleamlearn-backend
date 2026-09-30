@@ -5,11 +5,11 @@ import { QuestionsService } from './questions.service.js';
 import { CreateAdminQuestionDto } from './dto/create-admin-question.dto.js';
 import { UpdateAdminQuestionDto } from './dto/update-admin-question.dto.js';
 import { AdminQuestionsQueryDto } from './dto/admin-questions-query.dto.js';
-import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard.js';
+import { AdminJwtAuthGuard } from '../auth/guards/admin-jwt.guard.js';
 
 @ApiTags('Admin Question Management')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(AdminJwtAuthGuard)
 @Controller('api/v1/admin/questions')
 export class QuestionsController {
   constructor(private readonly questionsService: QuestionsService) {}

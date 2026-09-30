@@ -5,11 +5,11 @@ import { CoursesService } from './courses.service.js';
 import { CreateAdminCourseDto } from './dto/create-admin-course.dto.js';
 import { UpdateAdminCourseDto } from './dto/update-admin-course.dto.js';
 import { AdminCoursesQueryDto } from './dto/admin-courses-query.dto.js';
-import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard.js';
+import { AdminJwtAuthGuard } from '../auth/guards/admin-jwt.guard.js';
 
 @ApiTags('Admin Course Management')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(AdminJwtAuthGuard)
 @Controller('api/v1/admin/courses')
 export class CoursesController {
   constructor(private readonly coursesService: CoursesService) {}

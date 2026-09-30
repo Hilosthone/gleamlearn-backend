@@ -3,11 +3,11 @@ import { Controller, Get, Patch, Delete, Param, Query, UseGuards } from '@nestjs
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
 import { AiModerationService } from './ai-moderation.service.js';
 import { AiContentQueryDto } from './dto/ai-content-query.dto.js';
-import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard.js';
+import { AdminJwtAuthGuard } from '../auth/guards/admin-jwt.guard.js';
 
 @ApiTags('Admin AI Content Moderation')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(AdminJwtAuthGuard)
 @Controller('api/v1/admin/ai/generated-content')
 export class AiModerationController {
   constructor(private readonly aiModerationService: AiModerationService) {}

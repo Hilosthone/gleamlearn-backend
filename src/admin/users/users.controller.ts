@@ -4,11 +4,11 @@ import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagg
 import { AdminUsersService } from './users.service.js';
 import { AdminUsersQueryDto } from './dto/admin-users-query.dto.js';
 import { AdminResetPasswordDto } from './dto/admin-reset-password.dto.js';
-import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard.js';
+import { AdminJwtAuthGuard } from '../auth/guards/admin-jwt.guard.js';
 
 @ApiTags('Admin User Management')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(AdminJwtAuthGuard)
 @Controller('api/v1/admin/users')
 export class AdminUsersController {
   constructor(private readonly usersService: AdminUsersService) {}

@@ -3,11 +3,11 @@ import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
 import { ActivityService } from './activity.service.js';
 import { ActivityQueryDto } from './dto/activity-query.dto.js';
-import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard.js';
+import { AdminJwtAuthGuard } from '../auth/guards/admin-jwt.guard.js';
 
 @ApiTags('Admin Activity Monitoring')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(AdminJwtAuthGuard)
 @Controller('api/v1/admin/activity')
 export class ActivityController {
   constructor(private readonly activityService: ActivityService) {}

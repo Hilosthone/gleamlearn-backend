@@ -8,7 +8,7 @@ import {
   AdminResetPasswordDto, 
   AdminRefreshTokenDto 
 } from './dto/admin-auth.dto.js';
-import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard.js';
+import { AdminJwtAuthGuard } from '../auth/guards/admin-jwt.guard.js';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator.js';
 
 @ApiTags('Admin Authentication')
@@ -52,7 +52,7 @@ export class AdminAuthController {
   }
 
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(AdminJwtAuthGuard)
   @Get('me')
   @ApiOperation({ summary: 'Get current authenticated admin profile and role' })
   @ApiResponse({ status: 200, description: 'Admin profile retrieved successfully.' })

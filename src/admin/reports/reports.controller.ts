@@ -4,11 +4,11 @@ import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagg
 import { ReportsService } from './reports.service.js';
 import { AdminReportsQueryDto } from './dto/admin-reports-query.dto.js';
 import { UpdateAdminReportDto } from './dto/update-admin-report.dto.js';
-import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard.js';
+import { AdminJwtAuthGuard } from '../auth/guards/admin-jwt.guard.js';
 
 @ApiTags('Admin Reports Management')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(AdminJwtAuthGuard)
 @Controller('api/v1/admin/reports')
 export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
