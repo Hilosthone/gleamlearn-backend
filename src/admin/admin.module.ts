@@ -9,6 +9,7 @@ import { AdminCoursesModule } from './courses/courses.module.js';
 import { AdminQuestionsModule } from './questions/questions.module.js'; 
 import { AiModerationModule } from './ai-moderation/ai-moderation.module.js';
 import { ReportsModule } from './reports/reports.module.js';
+import { FinanceModule } from './finance/finance.module.js';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { ReportsModule } from './reports/reports.module.js';
     AdminQuestionsModule,
     AiModerationModule,
     ReportsModule,
+    FinanceModule,
   ],
   exports: [
     AdminAuthModule,
@@ -32,6 +34,7 @@ import { ReportsModule } from './reports/reports.module.js';
     AdminQuestionsModule,
     AiModerationModule,
     ReportsModule,
+    FinanceModule,
   ],
 })
 export class AdminModule {}
