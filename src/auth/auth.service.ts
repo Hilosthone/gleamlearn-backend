@@ -4,7 +4,8 @@
 // import { Repository } from 'typeorm';
 // import { User } from './entities/user.entity.js'; 
 // import { JwtService } from '@nestjs/jwt';
-// import { MailService } from '../mail/mail.service.js'; // <-- 1. Import MailService
+// import { MailService } from '../mail/mail.service.js'; 
+// import { NotificationsService } from '../notifications/notifications.service.js'; // <-- 1. Import NotificationsService
 // import * as bcrypt from 'bcrypt';
 
 // @Injectable()
@@ -13,7 +14,8 @@
 //     @InjectRepository(User)
 //     private readonly userRepository: Repository<User>,
 //     private readonly jwtService: JwtService,
-//     private readonly mailService: MailService, // <-- 2. Inject MailService here
+//     private readonly mailService: MailService,
+//     private readonly notificationsService: NotificationsService, // <-- 2. Inject NotificationsService here
 //   ) {}
 
 //   async signup(signupDto: Record<string, any>) {
@@ -67,6 +69,14 @@
 //       { expiresIn: '1d' }
 //     );
 //     await this.mailService.sendVerificationEmail(savedUser.email, verificationToken);
+
+//     // 4. Trigger dual-layer welcome notification (saves to DB inbox & fires FCM push)
+//     await this.notificationsService.createAndPushNotification(
+//       savedUser.id,
+//       'Welcome to GleamLearn! 🚀',
+//       'Your account has been created successfully. Explore your dashboard to get started with your learning journey.',
+//       'account'
+//     );
 
 //     return {
 //       message: 'Account created successfully. Please check your email to verify your account.',
@@ -158,17 +168,12 @@
 
 //   async verifyEmail(token: string) {
 //     try {
-//       // 4. Decode and verify the email token
 //       const payload = this.jwtService.verify(token);
 //       const user = await this.userRepository.findOne({ where: { email: payload.email } });
       
 //       if (!user) {
 //         throw new NotFoundException('User not found');
 //       }
-
-//       // Optional: Mark user as verified if you have an isVerified column
-//       // user.isVerified = true;
-//       // await this.userRepository.save(user);
 
 //       return { message: 'Email verified successfully' };
 //     } catch (error) {
@@ -188,8 +193,6 @@
 //   async forgotPassword(email: string) {
 //     const user = await this.userRepository.findOne({ where: { email } });
     
-//     // To prevent user enumeration attacks, we return success even if email doesn't exist,
-//     // but we only send the email if the user actually exists.
 //     if (user) {
 //       const resetToken = this.jwtService.sign({ email: user.email }, { expiresIn: '15m' });
 //       await this.mailService.sendPasswordResetEmail(user.email, resetToken);
@@ -224,18 +227,14 @@
 // }
 
 
-
-
-
-
 // src/auth/auth.service.ts
-import { Injectable, ConflictException, NotFoundException, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import { Injectable, ConflictException, NotFoundException, UnauthorizedException, BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './entities/user.entity.js'; 
 import { JwtService } from '@nestjs/jwt';
 import { MailService } from '../mail/mail.service.js'; 
-import { NotificationsService } from '../notifications/notifications.service.js'; // <-- 1. Import NotificationsService
+import { NotificationsService } from '../notifications/notifications.service.js';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
@@ -245,7 +244,7 @@ export class AuthService {
     private readonly userRepository: Repository<User>,
     private readonly jwtService: JwtService,
     private readonly mailService: MailService,
-    private readonly notificationsService: NotificationsService, // <-- 2. Inject NotificationsService here
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async signup(signupDto: Record<string, any>) {
@@ -293,20 +292,36 @@ export class AuthService {
     const payload = { sub: savedUser.id, email: savedUser.email, username: savedUser.username };
     const accessToken = this.jwtService.sign(payload);
 
-    // 3. Generate a secure verification token (expires in 1 day) and send the email
+    // 3. Generate a secure verification token (expires in 1 day) and handle email safely with console fallback
     const verificationToken = this.jwtService.sign(
       { email: savedUser.email }, 
       { expiresIn: '1d' }
     );
-    await this.mailService.sendVerificationEmail(savedUser.email, verificationToken);
 
-    // 4. Trigger dual-layer welcome notification (saves to DB inbox & fires FCM push)
-    await this.notificationsService.createAndPushNotification(
-      savedUser.id,
-      'Welcome to GleamLearn! 🚀',
-      'Your account has been created successfully. Explore your dashboard to get started with your learning journey.',
-      'account'
-    );
+    const frontendUrl = process.env.FRONTEND_URL || 'https://gleamlearn.vercel.app';
+    const verificationUrl = `${frontendUrl}/verify-email?token=${verificationToken}`;
+
+    try {
+      await this.mailService.sendVerificationEmail(savedUser.email, verificationToken);
+    } catch (mailError) {
+      console.warn('⚠️ SMTP/Mail warning: Could not send email via SMTP transporter.');
+      console.log('----------------------------------------------------');
+      console.log('🔗 MANUAL VERIFICATION LINK FOR TESTING:');
+      console.log(verificationUrl);
+      console.log('----------------------------------------------------');
+    }
+
+    // 4. Trigger dual-layer welcome notification safely
+    try {
+      await this.notificationsService.createAndPushNotification(
+        savedUser.id,
+        'Welcome to GleamLearn! 🚀',
+        'Your account has been created successfully. Explore your dashboard to get started with your learning journey.',
+        'account'
+      );
+    } catch (notifError) {
+      console.error('🟡 NOTIFICATION ERROR DURING SIGNUP:', notifError);
+    }
 
     return {
       message: 'Account created successfully. Please check your email to verify your account.',
@@ -415,7 +430,11 @@ export class AuthService {
     const user = await this.userRepository.findOne({ where: { email } });
     if (user) {
       const verificationToken = this.jwtService.sign({ email }, { expiresIn: '1d' });
-      await this.mailService.sendVerificationEmail(email, verificationToken);
+      try {
+        await this.mailService.sendVerificationEmail(email, verificationToken);
+      } catch (err) {
+        console.log(`Resend verification link for ${email}: ${process.env.FRONTEND_URL || 'https://gleamlearn.vercel.app'}/verify-email?token=${verificationToken}`);
+      }
     }
     return { message: `Verification email resent to ${email}` };
   }
@@ -425,7 +444,11 @@ export class AuthService {
     
     if (user) {
       const resetToken = this.jwtService.sign({ email: user.email }, { expiresIn: '15m' });
-      await this.mailService.sendPasswordResetEmail(user.email, resetToken);
+      try {
+        await this.mailService.sendPasswordResetEmail(user.email, resetToken);
+      } catch (err) {
+        console.log(`Password reset link for ${email}: ${process.env.FRONTEND_URL || 'https://gleamlearn.vercel.app'}/reset-password?token=${resetToken}`);
+      }
     }
 
     return { message: `Password reset instructions sent to ${email}` };
