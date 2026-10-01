@@ -43,6 +43,7 @@ import { SearchModule } from './search/search.module.js';
 import { ReportsModule } from './reports/reports.module.js';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module.js';
 import { UsageModule } from './usage/usage.module.js';
+import { HealthModule } from './health/health.module.js'; // Health Check Module
 //Admins
 import { AdminModule } from './admin/admin.module.js';
 
@@ -93,7 +94,8 @@ import { AdminModule } from './admin/admin.module.js';
           synchronize: true,
         };
       },
-    }),
+    }), 
+    HealthModule,
     MailModule,
     AuthModule,
     UsersModule,

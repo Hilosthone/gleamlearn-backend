@@ -16,7 +16,7 @@
 //   email: string;
 
 //   @Column({ type: 'varchar' })
-//   password: string; // Hashed password
+//   passwordHash: string; // Updated from 'password' to match AuthService mapping
 
 //   @Column({ type: 'varchar', nullable: true })
 //   dateOfBirth: string;
@@ -75,8 +75,13 @@
 // }
 
 
-// src/auth/entities/user.entity.ts
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 
 @Entity('users')
 export class User {
@@ -93,7 +98,7 @@ export class User {
   email: string;
 
   @Column({ type: 'varchar' })
-  passwordHash: string; // Updated from 'password' to match AuthService mapping
+  passwordHash: string;
 
   @Column({ type: 'varchar', nullable: true })
   dateOfBirth: string;
@@ -110,10 +115,10 @@ export class User {
   secondarySchool: string;
 
   @Column({ type: 'varchar', nullable: true })
-  secondaryClass: string; // JSS 1 - SSS 3
+  secondaryClass: string;
 
   @Column({ type: 'varchar', nullable: true })
-  secondaryStream: string; // Science, Art, Commercial
+  secondaryStream: string;
 
   // University Track
   @Column({ type: 'varchar', nullable: true })
@@ -129,11 +134,11 @@ export class User {
   courseOfStudy: string;
 
   @Column({ type: 'varchar', nullable: true })
-  level: string; // 100 Level - 600 Level
+  level: string;
 
   // Goals & Preferences
   @Column({ type: 'varchar', nullable: true })
-  examAimOrGoals: string; // WAEC, JAMB, University Exams, etc.
+  examAimOrGoals: string;
 
   @Column({ type: 'varchar', nullable: true })
   preferredStudyTime: string;
@@ -141,12 +146,20 @@ export class User {
   @Column({ default: false })
   isEmailVerified: boolean;
 
-  @Column({ type: 'varchar', nullable: true })
-  refreshToken: string;
+  // Session & Security
+  @Column({ name: 'refresh_token', type: 'text', nullable: true })
+  refreshToken: string | null;
 
-  @CreateDateColumn()
+  @Column({ name: 'is_restricted', default: false })
+  isRestricted: boolean;
+
+  @Column({ name: 'restriction_reason', type: 'text', nullable: true })
+  restrictionReason: string | null;
+
+  // Timestamps
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 }
