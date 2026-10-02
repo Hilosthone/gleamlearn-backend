@@ -205,8 +205,7 @@ import { Repository } from 'typeorm';
 import { v2 as cloudinary } from 'cloudinary';
 import { CLOUDINARY } from './cloudinary.provider.js';
 import { FileEntity } from './entities/file.entity.js';
-import * as streamifier from 'streamifier';
-// import streamifier from 'streamifier';
+import { Readable } from 'stream'; // Native Node.js stream API (No external types needed)
 
 @Injectable()
 export class FilesService {
@@ -250,7 +249,8 @@ export class FilesService {
         },
       );
 
-      streamifier.createReadStream(file.buffer).pipe(uploadStream);
+      // Stream the buffer directly to Cloudinary using native Node.js Readable stream
+      Readable.from(file.buffer).pipe(uploadStream);
     });
   }
 

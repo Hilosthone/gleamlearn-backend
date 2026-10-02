@@ -218,7 +218,6 @@ import { Controller, Get, Post, Delete, Param, Body, Query, UseInterceptors, Upl
 import { Throttle } from '@nestjs/throttler';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiConsumes, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
-import { memoryStorage } from 'multer';
 import { FilesService } from './files.service.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 
@@ -234,9 +233,7 @@ export class FilesController {
   @ApiOperation({ summary: 'Upload a single course material file (PDF, DOCX, PPTX, TXT, Image)' })
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(
-    FileInterceptor('file', {
-      storage: memoryStorage(), // Required for Cloudinary stream buffering
-    }),
+    FileInterceptor('file'), // Defaults cleanly to memory buffering
   )
   uploadSingleFile(
     @UploadedFile() file: any,
@@ -251,9 +248,7 @@ export class FilesController {
   @ApiOperation({ summary: 'Upload multiple course material files simultaneously' })
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(
-    FilesInterceptor('files', 10, {
-      storage: memoryStorage(), // Required for Cloudinary stream buffering
-    }),
+    FilesInterceptor('files', 10), // Defaults cleanly to memory buffering
   )
   async uploadMultipleFiles(
     @UploadedFiles() files: any[],
