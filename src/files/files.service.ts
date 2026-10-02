@@ -205,8 +205,8 @@ import { Repository } from 'typeorm';
 import { v2 as cloudinary } from 'cloudinary';
 import { CLOUDINARY } from './cloudinary.provider.js';
 import { FileEntity } from './entities/file.entity.js';
-// import * as streamifier from 'streamifier';
-import streamifier from 'streamifier';
+import * as streamifier from 'streamifier';
+// import streamifier from 'streamifier';
 
 @Injectable()
 export class FilesService {
