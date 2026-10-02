@@ -245,7 +245,7 @@ export class FilesService {
             const savedRecord = await this.fileRepo.save(fileRecord as any);
             resolve(savedRecord);
           } catch (dbError: any) {
-            reject(new InternalServerErrorException(`Failed to save file record: ${dbError.message}`));
+            reject(new InternalServerErrorException(`Failed to save file records: ${dbError.message}`));
           }
         },
       );
