@@ -1,6 +1,21 @@
 // src/types.d.ts
-declare module 'multer';
-declare module 'streamifier';
+// declare module 'multer';
+// declare module 'streamifier';
+
+
+// src/declarations.d.ts
+declare module 'multer' {
+  export function memoryStorage(): any;
+  export function diskStorage(options?: any): any;
+  const multer: any;
+  export default multer;
+}
+
+declare module 'streamifier' {
+  export function createReadStream(buffer: any): any;
+  const streamifier: any;
+  export default streamifier;
+}
 
 
 // // src/types.d.ts
