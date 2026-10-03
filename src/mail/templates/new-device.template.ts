@@ -1,11 +1,12 @@
-//src/mail/template/login-welcome.template.ts
-export const getLoginWelcomeEmailTemplate = (
+// src/mail/template/new-device.template.ts
+export const getNewDeviceEmailTemplate = (
   fullName: string,
   device: string,
   browser: string,
   location: string,
   dateTime: string,
-  supportEmail: string = 'gleamlearn.ain@gmail.com',
+  resetUrl: string,
+  supportEmail: string = 'gleamlearn.ai@gmail.com',
   year: number = new Date().getFullYear()
 ) => `
 <!DOCTYPE html>
@@ -38,7 +39,7 @@ export const getLoginWelcomeEmailTemplate = (
       box-shadow: 0 4px 24px rgba(139, 94, 60, 0.05);
     }
     .email-header {
-      background: linear-gradient(135deg, #8B5E3C 0%, #2563EB 100%);
+      background: linear-gradient(135deg, #8B5E3C 0%, #E67E22 100%);
       padding: 35px 30px;
       text-align: left;
       color: #FFFFFF;
@@ -75,7 +76,7 @@ export const getLoginWelcomeEmailTemplate = (
       line-height: 1.7;
     }
     .cta-button {
-      background-color: #DC2626;
+      background-color: #E67E22;
       color: #ffffff !important;
       padding: 14px 28px;
       text-decoration: none;
@@ -83,7 +84,7 @@ export const getLoginWelcomeEmailTemplate = (
       display: inline-block;
       font-family: 'Plus Jakarta Sans', sans-serif;
       font-weight: 600;
-      box-shadow: 0 4px 12px rgba(220, 38, 38, 0.2);
+      box-shadow: 0 4px 12px rgba(230, 126, 34, 0.2);
     }
     .footer {
       text-align: left;
@@ -99,30 +100,29 @@ export const getLoginWelcomeEmailTemplate = (
 <body>
   <div class="email-wrapper">
     <div style="display: none; max-height: 0px; overflow: hidden;">
-      Your GleamLearn account was just accessed.
+      A new device was used to access your account.
     </div>
     <div class="email-container">
       <div class="email-header">
         <h1 class="brand-title">GleamLearn 🎓</h1>
-        <p style="margin: 6px 0 0 0; font-size: 14px; opacity: 0.9;">Security Notification</p>
+        <p style="margin: 6px 0 0 0; font-size: 14px; opacity: 0.9;">New Device Alert</p>
       </div>
       <div class="email-body">
-        <h2>New Login Detected</h2>
+        <h2>New Device Detected</h2>
         <p>Hi ${fullName},</p>
-        <p>Your GleamLearn account was just accessed.</p>
+        <p>We noticed a sign-in to your GleamLearn account from a device we haven’t seen before.</p>
         
         <div class="details-box">
-          <strong>Login details:</strong><br>
           • Device: ${device}<br>
           • Browser: ${browser}<br>
           • Location: ${location}<br>
           • Time: ${dateTime}
         </div>
 
-        <p>If this was you, no action is required. If you don’t recognize this activity, secure your account immediately.</p>
+        <p>If you recognize this activity, you can continue learning normally. If you don’t recognize it, we recommend changing your password immediately.</p>
         
         <div style="text-align: center; margin: 30px 0;">
-          <a href="mailto:${supportEmail}" class="cta-button">Secure My Account</a>
+          <a href="${resetUrl}" class="cta-button">Review Account Security</a>
         </div>
       </div>
       <div class="footer">

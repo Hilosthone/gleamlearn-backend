@@ -1,11 +1,10 @@
-//src/mail/template/login-welcome.template.ts
-export const getLoginWelcomeEmailTemplate = (
-  fullName: string,
-  device: string,
-  browser: string,
-  location: string,
-  dateTime: string,
-  supportEmail: string = 'gleamlearn.ain@gmail.com',
+// src/mail/template/email-change-request.template.ts
+export const getEmailChangeRequestEmailTemplate = (
+  fullName: string, 
+  newEmail: string, 
+  otpCode: string, 
+  expiryMinutes: number = 10, 
+  supportEmail: string = 'support@gleamlearn.com', 
   year: number = new Date().getFullYear()
 ) => `
 <!DOCTYPE html>
@@ -14,7 +13,7 @@ export const getLoginWelcomeEmailTemplate = (
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@700&display=swap');
     
     body {
       margin: 0;
@@ -38,7 +37,7 @@ export const getLoginWelcomeEmailTemplate = (
       box-shadow: 0 4px 24px rgba(139, 94, 60, 0.05);
     }
     .email-header {
-      background: linear-gradient(135deg, #8B5E3C 0%, #2563EB 100%);
+      background: linear-gradient(135deg, #8B5E3C 0%, #D4A72C 100%);
       padding: 35px 30px;
       text-align: left;
       color: #FFFFFF;
@@ -65,25 +64,21 @@ export const getLoginWelcomeEmailTemplate = (
       color: #211A16;
       margin: 0 0 16px 0;
     }
-    .details-box {
-      background-color: #FCFAF8;
-      border: 1px solid #E7DED7;
+    .otp-box {
+      background: linear-gradient(135deg, #FFFBEB 0%, #FEF9C3 100%);
+      border: 2px dashed #D4A72C;
       border-radius: 12px;
-      padding: 20px;
-      margin: 20px 0;
-      font-size: 14px;
-      line-height: 1.7;
+      padding: 24px;
+      text-align: center;
+      margin: 25px 0;
     }
-    .cta-button {
-      background-color: #DC2626;
-      color: #ffffff !important;
-      padding: 14px 28px;
-      text-decoration: none;
-      border-radius: 10px;
-      display: inline-block;
-      font-family: 'Plus Jakarta Sans', sans-serif;
-      font-weight: 600;
-      box-shadow: 0 4px 12px rgba(220, 38, 38, 0.2);
+    .otp-code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 34px;
+      font-weight: 700;
+      color: #8B5E3C;
+      letter-spacing: 6px;
+      margin-top: 8px;
     }
     .footer {
       text-align: left;
@@ -97,36 +92,31 @@ export const getLoginWelcomeEmailTemplate = (
   </style>
 </head>
 <body>
+  <div style="display: none; max-height: 0px; overflow: hidden;">
+    Confirm your request to change your account email address.
+  </div>
   <div class="email-wrapper">
-    <div style="display: none; max-height: 0px; overflow: hidden;">
-      Your GleamLearn account was just accessed.
-    </div>
     <div class="email-container">
       <div class="email-header">
         <h1 class="brand-title">GleamLearn 🎓</h1>
-        <p style="margin: 6px 0 0 0; font-size: 14px; opacity: 0.9;">Security Notification</p>
+        <p style="margin: 6px 0 0 0; font-size: 14px; opacity: 0.9;">Account Settings Update</p>
       </div>
       <div class="email-body">
-        <h2>New Login Detected</h2>
+        <h2>Email Change Request</h2>
         <p>Hi ${fullName},</p>
-        <p>Your GleamLearn account was just accessed.</p>
+        <p>We received a request to update your GleamLearn account email address to <strong>${newEmail}</strong>.</p>
+        <p>Please use the secure code below to confirm this change:</p>
         
-        <div class="details-box">
-          <strong>Login details:</strong><br>
-          • Device: ${device}<br>
-          • Browser: ${browser}<br>
-          • Location: ${location}<br>
-          • Time: ${dateTime}
+        <div class="otp-box">
+          <p style="margin: 0; color: #713F12; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">Confirmation Code</p>
+          <div class="otp-code">${otpCode}</div>
         </div>
 
-        <p>If this was you, no action is required. If you don’t recognize this activity, secure your account immediately.</p>
-        
-        <div style="text-align: center; margin: 30px 0;">
-          <a href="mailto:${supportEmail}" class="cta-button">Secure My Account</a>
-        </div>
+        <p>This code will expire in <strong>${expiryMinutes} minutes</strong>.</p>
+        <p style="font-size: 14px; color: #8B8179;">If you didn't request this change, please ignore this email or contact support immediately to secure your account.</p>
       </div>
       <div class="footer">
-        <p style="margin: 0 0 8px 0;">For your security, never share your password or verification codes.</p>
+        <p style="margin: 0 0 8px 0;">This is an automated security notice from GleamLearn.</p>
         <p style="margin: 0;">© ${year} GleamLearn. All rights reserved. • For support: <a href="mailto:${supportEmail}" style="color: #8B5E3C; text-decoration: none;">${supportEmail}</a></p>
       </div>
     </div>

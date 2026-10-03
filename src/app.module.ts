@@ -13,6 +13,7 @@ import { AcademicModule } from './academic/academic.module.js';
 import { CoursesModule } from './courses/courses.module.js'; 
 import { LibraryModule } from './library/library.module.js';
 import { FilesModule } from './files/files.module.js';
+import { YoutubeModule } from './youtube/youtube.module.js';
 import { AiModule } from './ai/ai.module.js';
 import { NotesModule } from './notes/notes.module.js';
 import { LessonsModule } from './lessons/lessons.module.js';
@@ -103,6 +104,7 @@ import { AdminModule } from './admin/admin.module.js';
     CoursesModule, 
     LibraryModule,
     FilesModule,
+    YoutubeModule,
     AiModule,
     NotesModule,
     LessonsModule,

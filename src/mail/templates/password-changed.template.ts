@@ -1,11 +1,7 @@
-//src/mail/template/login-welcome.template.ts
-export const getLoginWelcomeEmailTemplate = (
-  fullName: string,
-  device: string,
-  browser: string,
-  location: string,
-  dateTime: string,
-  supportEmail: string = 'gleamlearn.ain@gmail.com',
+// src/mail/template/password-changed.template.ts
+export const getPasswordChangedEmailTemplate = (
+  fullName: string, 
+  supportEmail: string = 'gleamlearn.ai@gmail.com', 
   year: number = new Date().getFullYear()
 ) => `
 <!DOCTYPE html>
@@ -38,7 +34,7 @@ export const getLoginWelcomeEmailTemplate = (
       box-shadow: 0 4px 24px rgba(139, 94, 60, 0.05);
     }
     .email-header {
-      background: linear-gradient(135deg, #8B5E3C 0%, #2563EB 100%);
+      background: linear-gradient(135deg, #8B5E3C 0%, #2F855A 100%);
       padding: 35px 30px;
       text-align: left;
       color: #FFFFFF;
@@ -65,15 +61,6 @@ export const getLoginWelcomeEmailTemplate = (
       color: #211A16;
       margin: 0 0 16px 0;
     }
-    .details-box {
-      background-color: #FCFAF8;
-      border: 1px solid #E7DED7;
-      border-radius: 12px;
-      padding: 20px;
-      margin: 20px 0;
-      font-size: 14px;
-      line-height: 1.7;
-    }
     .cta-button {
       background-color: #DC2626;
       color: #ffffff !important;
@@ -97,36 +84,31 @@ export const getLoginWelcomeEmailTemplate = (
   </style>
 </head>
 <body>
+  <div style="display: none; max-height: 0px; overflow: hidden;">
+    Your account password has been updated.
+  </div>
   <div class="email-wrapper">
-    <div style="display: none; max-height: 0px; overflow: hidden;">
-      Your GleamLearn account was just accessed.
-    </div>
     <div class="email-container">
       <div class="email-header">
         <h1 class="brand-title">GleamLearn 🎓</h1>
         <p style="margin: 6px 0 0 0; font-size: 14px; opacity: 0.9;">Security Notification</p>
       </div>
       <div class="email-body">
-        <h2>New Login Detected</h2>
+        <h2>Password Successfully Changed</h2>
         <p>Hi ${fullName},</p>
-        <p>Your GleamLearn account was just accessed.</p>
+        <p>This is a confirmation that the password for your GleamLearn account was successfully changed.</p>
+        <p>If you made this change, you can safely disregard this email.</p>
         
-        <div class="details-box">
-          <strong>Login details:</strong><br>
-          • Device: ${device}<br>
-          • Browser: ${browser}<br>
-          • Location: ${location}<br>
-          • Time: ${dateTime}
+        <div style="background-color: #FEF2F2; border: 1px solid #FCA5A5; border-radius: 12px; padding: 20px; margin: 25px 0; color: #991B1B; font-size: 14px;">
+          <strong>Didn't make this change?</strong> If you did not update your password, your account may have been compromised. Please contact our support team immediately.
         </div>
 
-        <p>If this was you, no action is required. If you don’t recognize this activity, secure your account immediately.</p>
-        
         <div style="text-align: center; margin: 30px 0;">
-          <a href="mailto:${supportEmail}" class="cta-button">Secure My Account</a>
+          <a href="mailto:${supportEmail}" class="cta-button">Contact Support Immediately</a>
         </div>
       </div>
       <div class="footer">
-        <p style="margin: 0 0 8px 0;">For your security, never share your password or verification codes.</p>
+        <p style="margin: 0 0 8px 0;">This is an automated security alert from GleamLearn.</p>
         <p style="margin: 0;">© ${year} GleamLearn. All rights reserved. • For support: <a href="mailto:${supportEmail}" style="color: #8B5E3C; text-decoration: none;">${supportEmail}</a></p>
       </div>
     </div>

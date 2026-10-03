@@ -1,13 +1,5 @@
-//src/mail/template/login-welcome.template.ts
-export const getLoginWelcomeEmailTemplate = (
-  fullName: string,
-  device: string,
-  browser: string,
-  location: string,
-  dateTime: string,
-  supportEmail: string = 'gleamlearn.ain@gmail.com',
-  year: number = new Date().getFullYear()
-) => `
+// src/mail/template/welcome.template.ts
+export const getWelcomeEmailTemplate = (fullName: string, verificationUrl: string, supportEmail: string = 'support@gleamlearn.com', year: number = new Date().getFullYear()) => `
 <!DOCTYPE html>
 <html>
 <head>
@@ -38,7 +30,7 @@ export const getLoginWelcomeEmailTemplate = (
       box-shadow: 0 4px 24px rgba(139, 94, 60, 0.05);
     }
     .email-header {
-      background: linear-gradient(135deg, #8B5E3C 0%, #2563EB 100%);
+      background: linear-gradient(135deg, #8B5E3C 0%, #D4A72C 100%);
       padding: 35px 30px;
       text-align: left;
       color: #FFFFFF;
@@ -65,17 +57,18 @@ export const getLoginWelcomeEmailTemplate = (
       color: #211A16;
       margin: 0 0 16px 0;
     }
-    .details-box {
-      background-color: #FCFAF8;
-      border: 1px solid #E7DED7;
-      border-radius: 12px;
-      padding: 20px;
-      margin: 20px 0;
-      font-size: 14px;
-      line-height: 1.7;
+    ul {
+      margin: 0 0 24px 0;
+      padding-left: 20px;
+      color: #211A16;
+      font-size: 15px;
+      line-height: 1.6;
+    }
+    li {
+      margin-bottom: 6px;
     }
     .cta-button {
-      background-color: #DC2626;
+      background-color: #8B5E3C;
       color: #ffffff !important;
       padding: 14px 28px;
       text-decoration: none;
@@ -83,7 +76,7 @@ export const getLoginWelcomeEmailTemplate = (
       display: inline-block;
       font-family: 'Plus Jakarta Sans', sans-serif;
       font-weight: 600;
-      box-shadow: 0 4px 12px rgba(220, 38, 38, 0.2);
+      box-shadow: 0 4px 12px rgba(139, 94, 60, 0.2);
     }
     .footer {
       text-align: left;
@@ -99,34 +92,33 @@ export const getLoginWelcomeEmailTemplate = (
 <body>
   <div class="email-wrapper">
     <div style="display: none; max-height: 0px; overflow: hidden;">
-      Your GleamLearn account was just accessed.
+      Your learning journey starts here.
     </div>
     <div class="email-container">
       <div class="email-header">
         <h1 class="brand-title">GleamLearn 🎓</h1>
-        <p style="margin: 6px 0 0 0; font-size: 14px; opacity: 0.9;">Security Notification</p>
+        <p style="margin: 6px 0 0 0; font-size: 14px; opacity: 0.9;">AI-Powered Learning Ecosystem</p>
       </div>
       <div class="email-body">
-        <h2>New Login Detected</h2>
-        <p>Hi ${fullName},</p>
-        <p>Your GleamLearn account was just accessed.</p>
-        
-        <div class="details-box">
-          <strong>Login details:</strong><br>
-          • Device: ${device}<br>
-          • Browser: ${browser}<br>
-          • Location: ${location}<br>
-          • Time: ${dateTime}
-        </div>
-
-        <p>If this was you, no action is required. If you don’t recognize this activity, secure your account immediately.</p>
-        
+        <h2>Welcome to GleamLearn, ${fullName}! 🎉</h2>
+        <p>Your account has been successfully created, and you’re now ready to learn smarter, practice better, and understand deeply.</p>
+        <p>With GleamLearn, you can turn your learning materials into structured learning experiences including:</p>
+        <ul>
+          <li>Simplified explanations</li>
+          <li>Notes and summaries</li>
+          <li>Flashcards</li>
+          <li>Questions and quizzes</li>
+          <li>Tests and exams</li>
+          <li>AI-powered learning assistance</li>
+          <li>Interactive learning experiences</li>
+        </ul>
         <div style="text-align: center; margin: 30px 0;">
-          <a href="mailto:${supportEmail}" class="cta-button">Secure My Account</a>
+          <a href="${verificationUrl}" class="cta-button">Start Learning</a>
         </div>
       </div>
       <div class="footer">
-        <p style="margin: 0 0 8px 0;">For your security, never share your password or verification codes.</p>
+        <p style="margin: 0 0 10px 0;"><strong>GleamLearn</strong><br>Learn smarter. Practice better. Understand deeply. Prepare confidently.</p>
+        <p style="margin: 0 0 8px 0;">You’re receiving this email because of activity associated with your GleamLearn account.</p>
         <p style="margin: 0;">© ${year} GleamLearn. All rights reserved. • For support: <a href="mailto:${supportEmail}" style="color: #8B5E3C; text-decoration: none;">${supportEmail}</a></p>
       </div>
     </div>
