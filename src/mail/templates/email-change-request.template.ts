@@ -4,7 +4,7 @@ export const getEmailChangeRequestEmailTemplate = (
   newEmail: string, 
   otpCode: string, 
   expiryMinutes: number = 10, 
-  supportEmail: string = 'support@gleamlearn.com', 
+  supportEmail: string = 'gleamlearn.ai@gmail.com', 
   year: number = new Date().getFullYear()
 ) => `
 <!DOCTYPE html>

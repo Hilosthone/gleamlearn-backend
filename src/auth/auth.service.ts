@@ -572,6 +572,6 @@ export class AuthService {
       console.warn('⚠️ Could not send password reset success email via SMTP.');
     }
 
-    return { message: 'Password has been reset successfully' };
+    return { message: 'Password has been reset successfully!' };
   }
 }
