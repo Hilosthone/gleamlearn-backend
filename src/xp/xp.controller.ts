@@ -25,7 +25,7 @@ export class XpController {
   @Get()
   @ApiOperation({ 
     summary: 'Get XP Overview', 
-    description: 'Retrieves the authenticated user total accumulated XP points, current level, and progress metrics toward the next level.' 
+    description: 'Retrieves the authenticated user total accumulated XP points, current level, and progress metrics toward the next level(s).' 
   })
   @ApiResponse({ status: 200, description: 'Successfully retrieved XP summary.' })
   @ApiResponse({ status: 401, description: 'Unauthorized user token.' })
