@@ -220,6 +220,14 @@ export class ExamsController {
   })
   create(@Body() dto: CreateExamDto) { return this.examsService.create(dto); }
 
+  // Static routes must be declared before ':id' so they are not captured as an id
+  @Get('history')
+  @ApiOperation({
+    summary: 'Get student exam history',
+    description: 'Retrieve the history of all official exam attempts taken by the student.'
+  })
+  getHistory() { return this.examsService.getHistory(); }
+
   @Get(':id')
   @ApiOperation({
     summary: 'Get examination by ID',
@@ -291,13 +299,6 @@ export class ExamsController {
     description: 'Retrieve comprehensive breakdown of exam performance, scores, and topic mastery results.'
   })
   getResult(@Param('id') id: string) { return this.examsService.getResult(id); }
-
-  @Get('history')
-  @ApiOperation({
-    summary: 'Get student exam history',
-    description: 'Retrieve the history of all official exam attempts taken by the student.'
-  })
-  getHistory() { return this.examsService.getHistory(); }
 
   @Get('attempts/:id')
   @ApiOperation({

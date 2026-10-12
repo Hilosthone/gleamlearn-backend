@@ -254,6 +254,16 @@ export class TestsController {
     return this.testsService.create(createDto);
   }
 
+  // Static routes must be declared before ':id' so they are not captured as an id
+  @Get('attempts')
+  @ApiOperation({
+    summary: 'Get user test attempts',
+    description: 'Fetch the complete history of test attempts taken by the authenticated user.'
+  })
+  getUserAttempts() {
+    return this.testsService.getUserAttempts();
+  }
+
   @Get(':id')
   @ApiOperation({
     summary: 'Get test by ID',
@@ -342,15 +352,6 @@ export class TestsController {
   })
   getResults(@Param('id') id: string) {
     return this.testsService.getResults(id);
-  }
-
-  @Get('attempts')
-  @ApiOperation({
-    summary: 'Get user test attempts',
-    description: 'Fetch the complete history of test attempts taken by the authenticated user.'
-  })
-  getUserAttempts() {
-    return this.testsService.getUserAttempts();
   }
 
   @Get('attempts/:id')

@@ -1,8 +1,11 @@
-import { Controller, Get, Query, Res } from '@nestjs/common';
+import { Controller, Get, Query, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
 import { AdminExportService } from './admin-export.service.js';
 import { ExportQueryDto, ExportFormat } from './dto/export-query.dto.js';
+import { AdminJwtAuthGuard } from '../auth/guards/admin-jwt.guard.js';
 
+// SECURITY: these routes export user PII and platform data; admin authentication is mandatory
+@UseGuards(AdminJwtAuthGuard)
 @Controller('api/v1/admin/export')
 export class AdminExportController {
   constructor(private readonly exportService: AdminExportService) {}

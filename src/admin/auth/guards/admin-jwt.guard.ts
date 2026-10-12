@@ -23,7 +23,7 @@
 // }
 
 // src/admin/auth/guards/admin-jwt.guard.ts
-import { Injectable, ExecutionContext, UnauthorizedException } from '@nestjs/common';
+import { Injectable, ExecutionContext, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 
 @Injectable()
@@ -33,6 +33,10 @@ export class AdminJwtAuthGuard extends AuthGuard('admin-jwt') { // <-- Using 'ad
   }
 
   handleRequest(err: any, admin: any, info: any, context: ExecutionContext) {
+    // ADMIN_JWT_SECRET missing/invalid: passport reports it via `info`; surface it as 503, not as a bad token
+    if (info instanceof ServiceUnavailableException) {
+      throw info;
+    }
     if (err || !admin) {
       throw err || new UnauthorizedException('Admin authentication required');
     }

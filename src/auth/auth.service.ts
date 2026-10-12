@@ -290,6 +290,9 @@ import { JwtService } from '@nestjs/jwt';
 import { MailService } from '../mail/mail.service.js'; 
 import { NotificationsService } from '../notifications/notifications.service.js';
 import * as bcrypt from 'bcrypt';
+import { generateOtp } from '../common/security/otp.js';
+import { LEARNER_TOKEN_TYPE } from '../admin/auth/admin-jwt.config.js';
+import { buildBasicProfileUpdate } from '../common/utils/profile-update.util.js';
 
 @Injectable()
 export class AuthService {
@@ -320,7 +323,7 @@ export class AuthService {
     const passwordHash = await bcrypt.hash(password, saltRounds);
 
     // Generate a secure 6-digit OTP code and set expiry to 10 minutes from now
-    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpCode = generateOtp();
     const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
     const newUser = this.userRepository.create({
@@ -350,18 +353,15 @@ export class AuthService {
     const { passwordHash: _, verificationOtp: __, otpExpiresAt: ___, ...result } = savedUser;
 
     // Generate login token
-    const payload = { sub: savedUser.id, email: savedUser.email, username: savedUser.username };
+    const payload = { sub: savedUser.id, email: savedUser.email, username: savedUser.username, type: LEARNER_TOKEN_TYPE };
     const accessToken = this.jwtService.sign(payload);
 
     // Send verification email with 6-digit OTP (passing fullName and otpCode correctly)
     try {
       await this.mailService.sendVerificationEmail(savedUser.email, savedUser.fullName, otpCode);
     } catch (mailError) {
-      console.warn('⚠️ SMTP/Mail warning: Could not send email via SMTP transporter.');
-      console.log('----------------------------------------------------');
-      console.log('🔑 MANUAL VERIFICATION OTP CODE FOR TESTING:');
-      console.log(otpCode);
-      console.log('----------------------------------------------------');
+      // Never log the code: it grants account access. The user can request a new one.
+      console.warn('⚠️ SMTP/Mail warning: verification email could not be delivered.');
     }
 
     // Trigger dual-layer welcome notification safely
@@ -403,7 +403,7 @@ export class AuthService {
       console.warn('⚠️ Could not send login welcome email via SMTP transporter.');
     }
 
-    const payload = { sub: user.id, email: user.email, username: user.username };
+    const payload = { sub: user.id, email: user.email, username: user.username, type: LEARNER_TOKEN_TYPE };
     const accessToken = this.jwtService.sign(payload);
 
     const { passwordHash: _, verificationOtp: __, otpExpiresAt: ___, ...result } = user;
@@ -430,7 +430,8 @@ export class AuthService {
       throw new NotFoundException('User profile not found');
     }
 
-    Object.assign(user, updateDto);
+    // Explicit allowlist: protected fields (passwordHash, verification/OTP data, tokens, restriction flags) are never assignable here
+    Object.assign(user, buildBasicProfileUpdate(updateDto, user.email));
     const updatedUser = await this.userRepository.save(user);
     const { passwordHash: _, verificationOtp: __, otpExpiresAt: ___, ...result } = updatedUser;
 
@@ -442,6 +443,11 @@ export class AuthService {
 
   async changePassword(userId: string, body: Record<string, any>) {
     const { oldPassword, newPassword, confirmNewPassword } = body;
+
+    // Enforced here as well as in ChangePasswordDto, so it still holds if request validation is switched off
+    if (!oldPassword || !newPassword || !confirmNewPassword) {
+      throw new BadRequestException('oldPassword, newPassword and confirmNewPassword are required');
+    }
 
     if (newPassword !== confirmNewPassword) {
       throw new BadRequestException('New passwords do not match');
@@ -509,17 +515,16 @@ export class AuthService {
       throw new BadRequestException('Email is already verified');
     }
 
-    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpCode = generateOtp();
     user.verificationOtp = otpCode;
     user.otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
     await this.userRepository.save(user);
 
     try {
       await this.mailService.sendVerificationEmail(user.email, user.fullName, otpCode);
-    } catch (err) {
-      console.log('----------------------------------------------------');
-      console.log(`🔑 RESEND VERIFICATION OTP CODE FOR ${email}:`, otpCode);
-      console.log('----------------------------------------------------');
+    } catch {
+      // Never log the code: it grants account access.
+      console.warn('⚠️ SMTP/Mail warning: verification email could not be delivered.');
     }
 
     return { message: `New verification code resent to ${email}` };
@@ -529,17 +534,16 @@ export class AuthService {
     const user = await this.userRepository.findOne({ where: { email } });
     
     if (user) {
-      const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+      const otpCode = generateOtp();
       user.verificationOtp = otpCode;
       user.otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
       await this.userRepository.save(user);
 
       try {
         await this.mailService.sendPasswordResetEmail(user.email, user.fullName, otpCode);
-      } catch (err) {
-        console.log('----------------------------------------------------');
-        console.log(`🔑 PASSWORD RESET OTP CODE FOR ${email}:`, otpCode);
-        console.log('----------------------------------------------------');
+      } catch {
+        // Never log the reset code or the recipient: the response stays identical either way.
+        console.warn('⚠️ SMTP/Mail warning: password reset email could not be delivered.');
       }
     }
 
@@ -548,6 +552,15 @@ export class AuthService {
 
   async resetPassword(body: Record<string, any>) {
     const { token, newPassword, confirmNewPassword } = body;
+
+    // Enforced here as well as in ResetPasswordDto: the OTP lookup below must never run with a missing token
+    if (
+      typeof token !== 'string' || !token.trim() ||
+      typeof newPassword !== 'string' || !newPassword ||
+      typeof confirmNewPassword !== 'string' || !confirmNewPassword
+    ) {
+      throw new BadRequestException('token, newPassword and confirmNewPassword are required');
+    }
 
     if (newPassword !== confirmNewPassword) {
       throw new BadRequestException('New passwords do not match');

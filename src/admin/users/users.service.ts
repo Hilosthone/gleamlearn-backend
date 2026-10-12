@@ -141,6 +141,19 @@ import { AdminUsersQueryDto } from './dto/admin-users-query.dto.js';
 import { AdminResetPasswordDto } from './dto/admin-reset-password.dto.js';
 import * as bcrypt from 'bcrypt';
 
+/**
+ * Fields that must never leave the backend, even to administrators:
+ * the password hash, the live one-time code (it can reset the user's password),
+ * its expiry, and the refresh token.
+ */
+const SECRET_USER_FIELDS = ['passwordHash', 'verificationOtp', 'otpExpiresAt', 'refreshToken'] as const;
+
+export function toAdminUserView(user: User): Omit<User, (typeof SECRET_USER_FIELDS)[number]> {
+  const view: Record<string, unknown> = { ...user };
+  for (const field of SECRET_USER_FIELDS) delete view[field];
+  return view as Omit<User, (typeof SECRET_USER_FIELDS)[number]>;
+}
+
 @Injectable()
 export class AdminUsersService {
   constructor(
@@ -169,7 +182,7 @@ export class AdminUsersService {
       order: { createdAt: 'DESC' },
     });
 
-    const sanitizedUsers = users.map(({ passwordHash, ...rest }) => rest);
+    const sanitizedUsers = users.map(toAdminUserView);
 
     return {
       status: 'success',
@@ -182,8 +195,7 @@ export class AdminUsersService {
 
   async findOne(id: string) {
     const user = await this.ensureUserExists(id);
-    const { passwordHash, ...result } = user;
-    return { status: 'success', data: result };
+    return { status: 'success', data: toAdminUserView(user) };
   }
 
   async getProfile(id: string) {

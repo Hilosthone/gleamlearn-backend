@@ -17,6 +17,7 @@
 
 // src/quizzes/quizzes.module.ts
 import { Module } from '@nestjs/common';
+import { FilesModule } from '../files/files.module.js';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Quiz } from './entities/quiz.entity.js';
 import { QuizzesService } from './quizzes.service.js';
@@ -29,6 +30,7 @@ import { CoinsModule } from '../coins/coins.module.js';
     TypeOrmModule.forFeature([Quiz]),
     XpModule, 
     CoinsModule,
+    FilesModule,
   ],
   controllers: [QuizzesController],
   providers: [QuizzesService],

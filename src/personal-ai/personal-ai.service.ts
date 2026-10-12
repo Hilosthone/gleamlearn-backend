@@ -73,16 +73,14 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import axios from 'axios';
+import { getAiHttpClient } from '../common/ai-service/ai-http.client.js';
+import { toAiHttpException } from '../common/ai-service/ai-error.js';
 import { AiConversation } from './entities/conversation.entity.js';
 import { AiMessage } from './entities/ai-message.entity.js';
 import { EvaluateAnswerDto } from './dto/personal-ai.dto.js';
 
 @Injectable()
 export class PersonalAiService {
-  private readonly pythonApiUrl = process.env.AI_SERVICE_URL || 'https://gleamlearn-ai-service.onrender.com';
-  private readonly apiKey = process.env.AI_API_KEY || '';
-
   constructor(
     @InjectRepository(AiConversation)
     private readonly conversationRepo: Repository<AiConversation>,
@@ -90,24 +88,37 @@ export class PersonalAiService {
     private readonly messageRepo: Repository<AiMessage>,
   ) {}
 
-  private getAuthHeaders() {
-    return {
-      'Content-Type': 'application/json',
-      'X-API-Key': this.apiKey,
-    };
-  }
-
   async chat(userId: string, messageContent: string, conversationId?: string) {
-    let conversation: AiConversation;
+    let existingConversation: AiConversation | null = null;
 
     if (conversationId) {
-      const foundConv = await this.conversationRepo.findOne({
+      existingConversation = await this.conversationRepo.findOne({
         where: { id: conversationId, userId },
       });
-      if (!foundConv) {
+      if (!existingConversation) {
         throw new HttpException('Conversation not found', HttpStatus.NOT_FOUND);
       }
-      conversation = foundConv;
+    }
+
+    // 1. Get the AI response first. If the AI service fails, the request fails with a safe error
+    //    and nothing is persisted (no placeholder "offline" replies stored as AI messages).
+    let aiResponseText: string;
+    try {
+      const response = await getAiHttpClient().post('/api/v1/chat', {
+        message: messageContent,
+        conversationId: existingConversation?.id,
+      });
+      aiResponseText = response.data?.message || response.data?.response;
+    } catch (error) {
+      throw toAiHttpException(error, 'AI personal assistant chat');
+    }
+    if (!aiResponseText) {
+      throw new HttpException('AI generation failed. Please try again later.', HttpStatus.BAD_GATEWAY);
+    }
+
+    let conversation: AiConversation;
+    if (existingConversation) {
+      conversation = existingConversation;
     } else {
       conversation = this.conversationRepo.create({
         userId,
@@ -116,28 +127,13 @@ export class PersonalAiService {
       await this.conversationRepo.save(conversation);
     }
 
-    // 1. Save user message to PostgreSQL
+    // 2. Save user message to PostgreSQL
     const userMsg = this.messageRepo.create({
       conversationId: conversation.id,
       sender: 'user',
       content: messageContent,
     });
     await this.messageRepo.save(userMsg);
-
-    let aiResponseText = 'AI Assistant response unavailable.';
-
-    try {
-      // 2. Forward chat request to Python AI Microservice
-      const response = await axios.post(
-        `${this.pythonApiUrl}/api/v1/chat`,
-        { message: messageContent, conversationId: conversation.id },
-        { headers: this.getAuthHeaders() }
-      );
-      aiResponseText = response.data?.message || response.data?.response || aiResponseText;
-    } catch (error) {
-      // Fallback gracefully if Python microservice is cold-starting on Render
-      aiResponseText = `[Offline Mode] Python AI Service received your message: "${messageContent}"`;
-    }
 
     // 3. Save AI response message to PostgreSQL
     const aiMsg = this.messageRepo.create({
@@ -203,18 +199,11 @@ export class PersonalAiService {
   // Contextual Study Endpoints (Proxying to Python AI microservice)
   private async callPythonTool(endpoint: string, payload: any) {
     try {
-      const response = await axios.post(`${this.pythonApiUrl}/${endpoint}`, payload, {
-        headers: this.getAuthHeaders(),
-      });
+      const response = await getAiHttpClient().post(`/${endpoint}`, payload);
       return response.data;
     } catch (error) {
-      // Fallback response if microservice endpoint is unreachable
-      return {
-        status: 'success',
-        fallback: true,
-        message: `Processed locally or Python service unreachable for ${endpoint}`,
-        payload,
-      };
+      // Never report a failed AI call as a success
+      throw toAiHttpException(error, `AI personal assistant ${endpoint}`);
     }
   }
 

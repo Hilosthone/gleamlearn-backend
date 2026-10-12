@@ -88,31 +88,36 @@ export class YoutubeController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Get details and structured material of a specific YouTube resource' })
-  findResourceById(@Param('id') id: string) {
-    return this.youtubeService.findById(id);
+  findResourceById(@Req() req: any, @Param('id') id: string) {
+    const userId = req.user.id || req.user.sub;
+    return this.youtubeService.findById(id, userId);
   }
 
   @Delete(':id')
   @ApiOperation({ summary: 'Delete a submitted YouTube resource' })
-  deleteResource(@Param('id') id: string) {
-    return this.youtubeService.deleteResource(id);
+  deleteResource(@Req() req: any, @Param('id') id: string) {
+    const userId = req.user.id || req.user.sub;
+    return this.youtubeService.deleteResource(id, userId);
   }
 
   @Get(':id/status')
   @ApiOperation({ summary: 'Check processing status of a YouTube resource' })
-  getResourceStatus(@Param('id') id: string) {
-    return this.youtubeService.getStatus(id);
+  getResourceStatus(@Req() req: any, @Param('id') id: string) {
+    const userId = req.user.id || req.user.sub;
+    return this.youtubeService.getStatus(id, userId);
   }
 
   @Post(':id/process')
   @ApiOperation({ summary: 'Trigger transcription and OpenAI structuring for a YouTube video' })
-  processResource(@Param('id') id: string) {
-    return this.youtubeService.processYoutubeResource(id);
+  processResource(@Req() req: any, @Param('id') id: string) {
+    const userId = req.user.id || req.user.sub;
+    return this.youtubeService.processYoutubeResource(id, userId);
   }
 
   @Post(':id/reprocess')
   @ApiOperation({ summary: 'Reprocess a failed or outdated YouTube resource' })
-  reprocessResource(@Param('id') id: string) {
-    return this.youtubeService.reprocessYoutubeResource(id);
+  reprocessResource(@Req() req: any, @Param('id') id: string) {
+    const userId = req.user.id || req.user.sub;
+    return this.youtubeService.reprocessYoutubeResource(id, userId);
   }
 }

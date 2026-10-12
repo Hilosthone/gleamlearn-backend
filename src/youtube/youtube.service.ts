@@ -128,23 +128,21 @@
 import {
   Injectable,
   NotFoundException,
-  InternalServerErrorException,
   BadRequestException,
+  HttpException,
+  HttpStatus,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { YoutubeEntity } from './entities/youtube.entity.js';
 import { YoutubeTranscript } from 'youtube-transcript';
-import axios from 'axios';
+import { getAiHttpClient } from '../common/ai-service/ai-http.client.js';
+import { toAiHttpException } from '../common/ai-service/ai-error.js';
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 @Injectable()
 export class YoutubeService {
-  private readonly aiServiceUrl =
-    process.env.AI_SERVICE_URL || 'http://127.0.0.1:8000';
-
-  private readonly aiApiKey =
-    process.env.AI_API_KEY || 'your_shared_secret';
-
   constructor(
     @InjectRepository(YoutubeEntity)
     private youtubeRepo: Repository<YoutubeEntity>,
@@ -188,9 +186,15 @@ export class YoutubeService {
     });
   }
 
-  async findById(id: string): Promise<YoutubeEntity> {
+  // Ownership-scoped lookup: another user's resource is reported exactly like a missing one (404),
+  // so resource IDs cannot be used to discover other users' data.
+  async findById(id: string, userId: string): Promise<YoutubeEntity> {
+    if (!userId || !UUID_PATTERN.test(id)) {
+      throw new NotFoundException('YouTube resource not found');
+    }
+
     const resource = await this.youtubeRepo.findOne({
-      where: { id },
+      where: { id, userId },
     });
 
     if (!resource) {
@@ -200,8 +204,8 @@ export class YoutubeService {
     return resource;
   }
 
-  async deleteResource(id: string): Promise<{ message: string }> {
-    const resource = await this.findById(id);
+  async deleteResource(id: string, userId: string): Promise<{ message: string }> {
+    const resource = await this.findById(id, userId);
 
     await this.youtubeRepo.remove(resource);
 
@@ -210,8 +214,8 @@ export class YoutubeService {
     };
   }
 
-  async getStatus(id: string) {
-    const resource = await this.findById(id);
+  async getStatus(id: string, userId: string) {
+    const resource = await this.findById(id, userId);
 
     return {
       id: resource.id,
@@ -220,8 +224,20 @@ export class YoutubeService {
     };
   }
 
-  async processYoutubeResource(id: string): Promise<YoutubeEntity> {
-    const resource = await this.findById(id);
+  private async fetchTranscriptText(videoId: string): Promise<string> {
+    try {
+      const transcriptItems = await YoutubeTranscript.fetchTranscript(videoId);
+      return transcriptItems
+        .map((item: any) => item.text)
+        .join(' ')
+        .trim();
+    } catch {
+      return '';
+    }
+  }
+
+  async processYoutubeResource(id: string, userId: string): Promise<YoutubeEntity> {
+    const resource = await this.findById(id, userId);
 
     resource.status = 'PROCESSING';
     resource.processingError = '';
@@ -229,20 +245,12 @@ export class YoutubeService {
     await this.youtubeRepo.save(resource);
 
     try {
-      const transcriptItems = await YoutubeTranscript.fetchTranscript(
-        resource.videoId,
-      );
+      // Fetch the transcript here first; the AI service reuses it instead of fetching again.
+      // If this fetch fails or is empty, the AI service attempts its own fetch as a fallback.
+      const rawTranscript = await this.fetchTranscriptText(resource.videoId);
 
-      const rawTranscript = transcriptItems
-        .map((item: any) => item.text)
-        .join(' ');
-
-      resource.rawTranscript = rawTranscript;
-
-      if (!rawTranscript.trim()) {
-        throw new BadRequestException(
-          'No transcript was found for this YouTube video.',
-        );
+      if (rawTranscript) {
+        resource.rawTranscript = rawTranscript;
       }
 
       if (process.env.YOUTUBE_API_KEY) {
@@ -266,16 +274,11 @@ export class YoutubeService {
         resource.title = `YouTube Video (${resource.videoId})`;
       }
 
-      const aiResponse = await axios.post(
-        `${this.aiServiceUrl}/api/v1/youtube/${resource.id}/process`,
+      const aiResponse = await getAiHttpClient().post(
+        `/api/v1/youtube/${resource.id}/process`,
         {
           url: resource.videoUrl,
-        },
-        {
-          headers: {
-            'X-API-Key': this.aiApiKey,
-            'Content-Type': 'application/json',
-          },
+          ...(rawTranscript ? { transcript: rawTranscript } : {}),
         },
       );
 
@@ -283,8 +286,9 @@ export class YoutubeService {
         aiResponse.data?.generatedContent;
 
       if (!generatedContent) {
-        throw new Error(
+        throw new HttpException(
           'AI service returned no generated learning material.',
+          HttpStatus.BAD_GATEWAY,
         );
       }
 
@@ -293,24 +297,26 @@ export class YoutubeService {
 
       return this.youtubeRepo.save(resource);
     } catch (error: any) {
-      resource.status = 'FAILED';
+      // Store and return only a safe message; upstream/provider details are logged server-side
+      const safeError = toAiHttpException(error, `YouTube processing ${resource.id}`);
+      const safeMessage = String(safeError.message);
 
-      resource.processingError =
-        error.response?.data?.detail ||
-        error.message ||
-        'Unknown processing error occurred';
+      resource.status = 'FAILED';
+      resource.processingError = safeMessage;
 
       await this.youtubeRepo.save(resource);
 
-      throw new InternalServerErrorException(
-        `Failed to process YouTube video: ${resource.processingError}`,
+      throw new HttpException(
+        `Failed to process YouTube video: ${safeMessage}`,
+        safeError.getStatus(),
       );
     }
   }
 
   async reprocessYoutubeResource(
     id: string,
+    userId: string,
   ): Promise<YoutubeEntity> {
-    return this.processYoutubeResource(id);
+    return this.processYoutubeResource(id, userId);
   }
 }

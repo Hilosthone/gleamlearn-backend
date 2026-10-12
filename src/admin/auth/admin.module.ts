@@ -38,6 +38,7 @@ import { Admin } from './entity/admin.entity.js';
 import { AdminAuthService } from './admin-auth.service.js';
 import { AdminAuthController } from './admin-auth.controller.js';
 import { AdminJwtStrategy } from './strategies/admin-jwt.strategy.js';
+import { getAdminJwtExpiresIn, getAdminJwtSecret } from './admin-jwt.config.js';
 
 @Module({
   imports: [
@@ -45,10 +46,12 @@ import { AdminJwtStrategy } from './strategies/admin-jwt.strategy.js';
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
+      // Dedicated admin secret with no fallback. AdminAuthService also passes the secret
+      // explicitly on every sign/verify, so the global learner JwtService can never be used here.
       useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('JWT_SECRET') || 'super-secret-jwt-key',
-        signOptions: { 
-          expiresIn: (config.get<string>('JWT_EXPIRES_IN') || '7d') as any, 
+        secret: getAdminJwtSecret(config) ?? undefined,
+        signOptions: {
+          expiresIn: getAdminJwtExpiresIn(config) as any,
         },
       }),
     }),

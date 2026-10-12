@@ -71,13 +71,15 @@ import { AdminModule } from './admin/admin.module.js';
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => {
         const databaseUrl = configService.get<string>('DATABASE_URL');
+        // Schema auto-sync is opt-in only (DB_SYNCHRONIZE=true). It must stay off against shared/production databases.
+        const synchronize = configService.get<string>('DB_SYNCHRONIZE', 'false').toLowerCase() === 'true';
 
         if (databaseUrl && databaseUrl.includes('supabase.co')) {
           return {
             type: 'postgres' as const,
             url: databaseUrl,
             autoLoadEntities: true, 
-            synchronize: true,
+            synchronize,
             ssl: {
               rejectUnauthorized: false,
             },
@@ -92,7 +94,7 @@ import { AdminModule } from './admin/admin.module.js';
           password: configService.get<string>('DATABASE_PASSWORD', 'postgres'),
           database: configService.get<string>('DATABASE_NAME', 'mycoursea_db'),
           autoLoadEntities: true,
-          synchronize: true,
+          synchronize,
         };
       },
     }), 

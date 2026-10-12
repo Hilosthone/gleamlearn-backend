@@ -326,6 +326,18 @@ export class QuizzesController {
     return this.quizzesService.create(createQuizDto);
   }
 
+  // Static routes must be declared before ':id' so they are not captured as an id
+  @Get('attempts')
+  @ApiOperation({
+    summary: 'Get user quiz attempts',
+    description: 'Fetch the complete history of quiz attempts taken by the authenticated user.'
+  })
+  @ApiResponse({ status: 200, description: 'User attempt history retrieved successfully.' })
+  @ApiResponse({ status: 401, description: 'Unauthorized.' })
+  getUserAttempts() {
+    return this.quizzesService.getUserAttempts();
+  }
+
   @Get(':id')
   @ApiOperation({
     summary: 'Get quiz by ID',
@@ -451,17 +463,6 @@ export class QuizzesController {
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
   getResults(@Param('id') id: string) {
     return this.quizzesService.getResults(id);
-  }
-
-  @Get('attempts')
-  @ApiOperation({
-    summary: 'Get user quiz attempts',
-    description: 'Fetch the complete history of quiz attempts taken by the authenticated user.'
-  })
-  @ApiResponse({ status: 200, description: 'User attempt history retrieved successfully.' })
-  @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  getUserAttempts() {
-    return this.quizzesService.getUserAttempts();
   }
 
   @Get('attempts/:id')

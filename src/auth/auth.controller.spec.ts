@@ -1,50 +1,12 @@
-// // src/auth/auth.controller.spec.ts
-// import { Test, TestingModule } from '@nestjs/testing';
-// import { AuthController } from './auth.controller.js';
-// import { AuthService } from './auth.service.js';
-// import { jest } from '@jest/globals';
-
-// describe('AuthController', () => {
-//   let controller: AuthController;
-
-//   beforeEach(async () => {
-//     const module: TestingModule = await Test.createTestingModule({
-//       controllers: [AuthController],
-//       providers: [
-//         {
-//           provide: AuthService,
-//           useValue: {
-//             signup: jest.fn().mockResolvedValue({ message: 'Mock signup' }),
-//             login: jest.fn().mockResolvedValue({ message: 'Mock login' }),
-//             logout: jest.fn().mockReturnValue({ message: 'Mock logout' }),
-//             refreshToken: jest.fn().mockReturnValue({ message: 'Mock refresh' }),
-//             verifyEmail: jest.fn().mockReturnValue({ message: 'Mock verify' }),
-//             resendVerification: jest.fn().mockReturnValue({ message: 'Mock resend' }),
-//             forgotPassword: jest.fn().mockReturnValue({ message: 'Mock forgot' }),
-//             resetPassword: jest.fn().mockReturnValue({ message: 'Mock reset' }),
-//             changePassword: jest.fn().mockReturnValue({ message: 'Mock change' }),
-//             getMe: jest.fn().mockResolvedValue({ message: 'Mock getMe' }),
-//           } as any, // <-- This forces TypeScript to bypass strict method signature checks on the mock
-//         },
-//       ],
-//     }).compile();
-
-//     controller = module.get<AuthController>(AuthController);
-//   });
-
-//   it('should be defined', () => {
-//     expect(controller).toBeDefined();
-//   });
-// });
-
-
-// src/auth/auth.controller.spec.ts
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthController } from './auth.controller.js';
-import { AuthService } from './auth.service.js';
+import { JwtAuthGuard } from './guards/jwt-auth.guard.js';
 import { getRepositoryToken } from '@nestjs/typeorm';
-// import { UserEntity } from '../users/users.entity.js';
-import { User } from '../users/users.entity.js';
+import { JwtService } from '@nestjs/jwt';
+import { AuthService } from './auth.service.js';
+import { User } from './entities/user.entity.js';
+import { MailService } from '../mail/mail.service.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 
 describe('AuthController', () => {
   let controller: AuthController;
@@ -54,16 +16,15 @@ describe('AuthController', () => {
       controllers: [AuthController],
       providers: [
         AuthService,
-        {
-          provide: getRepositoryToken(User),
-          useValue: {
-            findOne: () => {},
-            create: () => {},
-            save: () => {},
-          },
-        },
+        { provide: getRepositoryToken(User), useValue: { findOne: vi.fn(), create: vi.fn(), save: vi.fn() } },
+        { provide: JwtService, useValue: { sign: vi.fn(), signAsync: vi.fn(), verify: vi.fn() } },
+        { provide: MailService, useValue: {} },
+        { provide: NotificationsService, useValue: {} },
       ],
-    }).compile();
+    })
+      .overrideGuard(JwtAuthGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     controller = module.get<AuthController>(AuthController);
   });

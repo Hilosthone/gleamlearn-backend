@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, MinLength } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class ResetPasswordDto {
   @ApiProperty({ example: 'abc123xyz-reset-token' })
@@ -10,6 +10,11 @@ export class ResetPasswordDto {
   @IsNotEmpty()
   @MinLength(6)
   newPassword: string;
+
+  @ApiProperty({ example: 'NewSecurePassword123!', description: 'Must match newPassword' })
+  @IsNotEmpty()
+  @IsString()
+  confirmNewPassword: string;
 }
 
 export class ChangePasswordDto {
@@ -21,12 +26,41 @@ export class ChangePasswordDto {
   @IsNotEmpty()
   @MinLength(6)
   newPassword: string;
+
+  @ApiProperty({ example: 'NewSecurePassword123!', description: 'Must match newPassword' })
+  @IsNotEmpty()
+  @IsString()
+  confirmNewPassword: string;
 }
 
 export class UpdateUserDto {
-  @ApiProperty({ example: 'Hilosthone Sulyman', required: false })
+  @ApiProperty({ example: 'Hilosthone Sulyman', required: false, description: 'Legacy alias for fullName' })
+  @IsOptional()
+  @IsString()
   name?: string;
 
-  @ApiProperty({ example: 'hilosthone@example.com', required: false })
+  @ApiProperty({ example: 'Hilosthone Sulyman', required: false })
+  @IsOptional()
+  @IsString()
+  fullName?: string;
+
+  @ApiProperty({ example: 'hilosthone', required: false })
+  @IsOptional()
+  @IsString()
+  username?: string;
+
+  @ApiProperty({ example: '2004-05-12', required: false })
+  @IsOptional()
+  @IsString()
+  dateOfBirth?: string;
+
+  @ApiProperty({ example: 'Nigeria', required: false })
+  @IsOptional()
+  @IsString()
+  country?: string;
+
+  @ApiProperty({ example: 'hilosthone@example.com', required: false, description: 'Must equal the current email; changing email requires verification' })
+  @IsOptional()
+  @IsEmail()
   email?: string;
 }

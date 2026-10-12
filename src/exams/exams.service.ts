@@ -4,35 +4,30 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Exam } from './entities/exam.entity.js';
 import { ConfigService } from '@nestjs/config';
-import axios from 'axios';
+import { getAiHttpClient } from '../common/ai-service/ai-http.client.js';
+import { toAiHttpException } from '../common/ai-service/ai-error.js';
+import { FilesService } from '../files/files.service.js';
+import { resolveDocumentPayload } from '../common/storage/document-source.js';
 import { CreateExamDto } from './dto/create-exam.dto.js';
 import { SubmitExamDto } from './dto/submit-exam.dto.js';
 
 @Injectable()
 export class ExamsService {
-  private aiServiceUrl: string;
-  private aiApiKey: string;
 
   constructor(
     @InjectRepository(Exam)
     private examRepository: Repository<Exam>,
     private configService: ConfigService,
+    private readonly filesService: FilesService,
   ) {
-    this.aiServiceUrl = this.configService.get<string>('AI_SERVICE_URL', 'http://127.0.0.1:8000');
-    this.aiApiKey = this.configService.get<string>('AI_API_KEY', 'your_secret_token');
   }
 
   private async callPythonAi(endpoint: string, payload: any) {
     try {
-      const response = await axios.post(`${this.aiServiceUrl}${endpoint}`, payload, {
-        headers: { Authorization: `Bearer ${this.aiApiKey}` },
-      });
+      const response = await getAiHttpClient().post(endpoint, payload);
       return response.data;
     } catch (error: any) {
-      throw new HttpException(
-        error.response?.data?.detail || 'Failed to communicate with AI microservice',
-        error.response?.status || HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      throw toAiHttpException(error, `AI call ${endpoint}`);
     }
   }
 
@@ -74,7 +69,9 @@ export class ExamsService {
   }
 
   async generateFromDocument(payload: any) {
-    return this.callPythonAi('/api/v1/exams/generate-from-document', payload);
+    // Only an uploaded file id is accepted; a client-supplied fileUrl is never forwarded to the AI service
+    const body = await resolveDocumentPayload(payload, (id) => this.filesService.findFileById(id));
+    return this.callPythonAi('/api/v1/exams/generate-from-document', body);
   }
 
   // --- Attempts, Grading & Simulation ---

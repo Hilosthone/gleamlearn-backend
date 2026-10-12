@@ -4,7 +4,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { TutorSession } from './entities/tutor-session.entity.js';
 import { TutorMessage } from './entities/tutor-message.entity.js';
-import axios from 'axios';
+import { getAiHttpClient } from '../common/ai-service/ai-http.client.js';
+import { toAiHttpException } from '../common/ai-service/ai-error.js';
 
 @Injectable()
 export class AiTutorService {
@@ -51,12 +52,12 @@ export class AiTutorService {
   async addMessage(sessionId: string, userId: string, messageText: string) {
     await this.getSessionById(sessionId, userId); // Verify ownership
 
+    // Get the AI Tutor response first, so a failed AI call does not leave an unanswered message in the session
+    const aiResponseText = await this.proxyToPython('ai-tutor/message', { sessionId, message: messageText });
+
     // Save user message
     const userMsg = this.messageRepo.create({ sessionId, sender: 'user', content: messageText });
     await this.messageRepo.save(userMsg);
-
-    // Proxy to Python microservice for AI Tutor response
-    const aiResponseText = await this.proxyToPython('ai-tutor/message', { sessionId, message: messageText });
 
     // Save tutor response
     const tutorMsg = this.messageRepo.create({ sessionId, sender: 'tutor', content: aiResponseText });
@@ -66,30 +67,26 @@ export class AiTutorService {
   }
 
   async proxyToPython(endpoint: string, data: any) {
-    const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
-    const aiApiKey = process.env.AI_API_KEY || '674930';
 
     try {
-      const response = await axios.post(`${aiServiceUrl}/api/v1/${endpoint}`, data, {
-        headers: { 'X-API-Key': aiApiKey },
-      });
-      return response.data.response || response.data.message || 'AI Tutor processed your request.';
+      const response = await getAiHttpClient().post(`/api/v1/${endpoint}`, data);
+      const text = response.data?.response || response.data?.message;
+      if (!text) {
+        throw new HttpException('AI generation failed. Please try again later.', HttpStatus.BAD_GATEWAY);
+      }
+      return text;
     } catch (error: any) { // Handled 'unknown' error type safely
-      throw new Error(`AI Microservice Error: ${error?.message || 'Unknown error'}`);
+      throw toAiHttpException(error, `AI tutor call ${endpoint}`);
     }
   }
 
   async callGeneralTool(endpoint: string, data: any) {
-    const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
-    const aiApiKey = process.env.AI_API_KEY || '674930';
 
     try {
-      const response = await axios.post(`${aiServiceUrl}/api/v1/${endpoint}`, data, {
-        headers: { 'X-API-Key': aiApiKey },
-      });
+      const response = await getAiHttpClient().post(`/api/v1/${endpoint}`, data);
       return response.data;
     } catch (error: any) { // Handled 'unknown' error type safely
-      throw new Error(`AI Microservice Error: ${error?.message || 'Unknown error'}`);
+      throw toAiHttpException(error, `AI tutor call ${endpoint}`);
     }
   }
 }

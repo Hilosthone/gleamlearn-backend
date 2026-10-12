@@ -1,7 +1,7 @@
 // src/xp/xp.service.ts
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Like, Repository } from 'typeorm';
 import { XpTransaction } from './entities/xp-transaction.entity.js';
 import { User } from '../auth/entities/user.entity.js';
 
@@ -56,5 +56,13 @@ export class XpService {
     });
 
     return await this.xpRepo.save(transaction);
+  }
+
+  // Check whether XP was already awarded for a specific reference (e.g., a quiz id embedded in the description)
+  async hasAwardForReference(userId: string, source: string, referenceMarker: string): Promise<boolean> {
+    const count = await this.xpRepo.count({
+      where: { userId, source, description: Like(`%${referenceMarker}%`) },
+    });
+    return count > 0;
   }
 }

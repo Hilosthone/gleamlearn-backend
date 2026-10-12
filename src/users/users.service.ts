@@ -134,6 +134,12 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../auth/entities/user.entity.js';
+import {
+  ACADEMIC_PROFILE_FIELDS,
+  PREFERENCE_FIELDS,
+  buildBasicProfileUpdate,
+  pickAllowed,
+} from '../common/utils/profile-update.util.js';
 import { UpdateUserDto, UpdateAcademicProfileDto, UpdatePreferencesDto } from './dto/update-user.dto.js';
 
 @Injectable()
@@ -158,7 +164,14 @@ export class UsersService {
   }
 
   async updateProfile(userId: string, updateDto: UpdateUserDto) {
-    await this.userRepository.update(userId, updateDto as any);
+    const current = await this.userRepository.findOne({ where: { id: userId } });
+    if (!current) {
+      throw new NotFoundException('User not found');
+    }
+    const update = buildBasicProfileUpdate(updateDto, current.email);
+    if (Object.keys(update).length > 0) {
+      await this.userRepository.update(userId, update as any);
+    }
     return this.getProfile(userId);
   }
 
@@ -201,12 +214,18 @@ export class UsersService {
   }
 
   async updateAcademicProfile(userId: string, academicDto: UpdateAcademicProfileDto) {
-    await this.userRepository.update(userId, academicDto as any);
+    const update = pickAllowed(academicDto, ACADEMIC_PROFILE_FIELDS);
+    if (Object.keys(update).length > 0) {
+      await this.userRepository.update(userId, update as any);
+    }
     return { message: 'Academic profile updated successfully', data: await this.getProfile(userId) };
   }
 
   async updatePreferences(userId: string, prefsDto: UpdatePreferencesDto) {
-    await this.userRepository.update(userId, prefsDto as any);
+    const update = pickAllowed(prefsDto, PREFERENCE_FIELDS);
+    if (Object.keys(update).length > 0) {
+      await this.userRepository.update(userId, update as any);
+    }
     return { message: 'Learning preferences updated successfully', data: await this.getProfile(userId) };
   }
 

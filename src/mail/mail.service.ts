@@ -186,8 +186,6 @@ export class MailService {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       this.logger.error(`Failed to send verification email: ${errorMessage}`);
-      console.log('🔗 MANUAL VERIFICATION LINK:', verificationUrl);
-      console.log('🔑 OTP CODE:', otpCode);
       throw new InternalServerErrorException('Could not send verification email');
     }
   }
@@ -214,8 +212,6 @@ export class MailService {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       this.logger.error(`Failed to send password reset email: ${errorMessage}`);
-      console.log('🔗 MANUAL PASSWORD RESET LINK:', resetUrl);
-      console.log('🔑 OTP CODE:', otpCode);
       throw new InternalServerErrorException('Could not send password reset email');
     }
   }
@@ -317,7 +313,6 @@ export class MailService {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       this.logger.error(`Failed to send 2FA email: ${errorMessage}`);
-      console.log('🔑 2FA OTP CODE:', otpCode);
       throw new InternalServerErrorException('Could not send 2FA email');
     }
   }
@@ -342,7 +337,6 @@ export class MailService {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       this.logger.error(`Failed to send email change request email: ${errorMessage}`);
-      console.log('🔑 EMAIL CHANGE OTP CODE:', otpCode);
       throw new InternalServerErrorException('Could not send email change request email');
     }
   }

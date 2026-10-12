@@ -123,14 +123,20 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Quiz } from './entities/quiz.entity.js';
 import { ConfigService } from '@nestjs/config';
-import axios from 'axios';
+import { getAiHttpClient } from '../common/ai-service/ai-http.client.js';
+import { toAiHttpException } from '../common/ai-service/ai-error.js';
+import { FilesService } from '../files/files.service.js';
+import { resolveDocumentPayload } from '../common/storage/document-source.js';
 import { XpService } from '../xp/xp.service.js';
 import { CoinsService } from '../coins/coins.service.js'; // 1. Import CoinsService
+import { gradeQuiz } from './utils/grade-quiz.util.js';
+
+const QUIZ_PASS_SCORE = 50;
+const QUIZ_XP_REWARD = 50;
+const QUIZ_COIN_REWARD = 20;
 
 @Injectable()
 export class QuizzesService {
-  private pythonAiUrl: string;
-  private aiApiKey: string;
 
   constructor(
     @InjectRepository(Quiz)
@@ -138,22 +144,16 @@ export class QuizzesService {
     private configService: ConfigService,
     private readonly xpService: XpService,
     private readonly coinsService: CoinsService, // 2. Inject CoinsService here
+    private readonly filesService: FilesService,
   ) {
-    this.pythonAiUrl = this.configService.get<string>('AI_SERVICE_URL', 'http://127.0.0.1:8000');
-    this.aiApiKey = this.configService.get<string>('AI_API_KEY', 'your_secret_token');
   }
 
   private async callPythonAi(endpoint: string, payload: any) {
     try {
-      const response = await axios.post(`${this.pythonAiUrl}${endpoint}`, payload, {
-        headers: { Authorization: `Bearer ${this.aiApiKey}` },
-      });
+      const response = await getAiHttpClient().post(endpoint, payload);
       return response.data;
     } catch (error: any) {
-      throw new HttpException(
-        error.response?.data?.detail || 'Failed to communicate with AI microservice',
-        error.response?.status || HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      throw toAiHttpException(error, `AI call ${endpoint}`);
     }
   }
 
@@ -193,7 +193,9 @@ export class QuizzesService {
   }
 
   async generateFromDocument(payload: any) {
-    return this.callPythonAi('/api/v1/quizzes/generate-from-document', payload);
+    // Only an uploaded file id is accepted; a client-supplied fileUrl is never forwarded to the AI service
+    const body = await resolveDocumentPayload(payload, (id) => this.filesService.findFileById(id));
+    return this.callPythonAi('/api/v1/quizzes/generate-from-document', body);
   }
 
   async generateFromTopic(payload: any) {
@@ -214,42 +216,59 @@ export class QuizzesService {
 
   async submitAttempt(userId: string, quizId: string, payload: any) {
     const quiz = await this.findOne(quizId);
-    // Real grading logic evaluates payload.answers against answer keys stored in DB
-    const score = 85.0;
-    const passed = score >= 50.0;
+
+    // Grade the submitted answers against the answer key stored on the quiz questions
+    const result = gradeQuiz(quiz.questions, payload?.answers);
+    const passed = result.graded && result.score >= QUIZ_PASS_SCORE;
 
     let xpAwarded = 0;
     let coinsAwarded = 0;
+    let message: string;
 
-    // 3. Automatically award XP and Coins server-side upon successful completion
-    if (passed) {
-      xpAwarded = 50;
-      coinsAwarded = 20; // 20 coins reward for passing
+    // Reward policy: only a graded, passing attempt earns rewards, and only once per user per quiz
+    const rewardMarker = `[quiz:${quiz.id}]`;
+    const alreadyRewarded = passed
+      ? await this.xpService.hasAwardForReference(userId, 'QUIZ_COMPLETED', rewardMarker)
+      : false;
+
+    if (!result.graded) {
+      message = 'Quiz submitted, but it has no answer key to grade against. No rewards were awarded.';
+    } else if (!passed) {
+      message = `Quiz submitted and graded. A score of at least ${QUIZ_PASS_SCORE}% is required to earn rewards.`;
+    } else if (alreadyRewarded) {
+      message = 'Quiz submitted and graded. Rewards for this quiz have already been awarded.';
+    } else {
+      xpAwarded = QUIZ_XP_REWARD;
+      coinsAwarded = QUIZ_COIN_REWARD;
 
       await this.xpService.awardXp(
         userId,
         xpAwarded,
         'QUIZ_COMPLETED',
-        `Awarded ${xpAwarded} XP for completing quiz: ${quiz.title || quizId}`
+        `Awarded ${xpAwarded} XP for completing quiz: ${quiz.title || quizId} ${rewardMarker}`
       );
 
       await this.coinsService.awardCoins(
         userId,
         coinsAwarded,
         'QUIZ_COMPLETED',
-        `Awarded ${coinsAwarded} coins for completing quiz: ${quiz.title || quizId}`
+        `Awarded ${coinsAwarded} coins for completing quiz: ${quiz.title || quizId} ${rewardMarker}`
       );
+
+      message = 'Quiz submitted, graded, XP, and Coins awarded successfully server-side.';
     }
 
     return {
       status: 'success',
       quizId,
-      score,
-      totalQuestions: 10,
-      correctAnswers: 8,
+      score: result.score,
+      totalQuestions: result.totalQuestions,
+      correctAnswers: result.correctAnswers,
+      graded: result.graded,
+      passed,
       xpAwarded,
       coinsAwarded,
-      message: 'Quiz submitted, graded, XP, and Coins awarded successfully server-side.',
+      message,
     };
   }
 
