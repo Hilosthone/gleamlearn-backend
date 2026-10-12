@@ -5,6 +5,8 @@ import { Repository, ILike } from 'typeorm';
 import { Course } from './entities/course.entity.js';
 import { Topic } from './entities/topic.entity.js';
 import { Enrollment } from './entities/enrollment.entity.js';
+import { LessonEntity } from '../lessons/entities/lesson.entity.js';
+import { LessonProgressEntity } from '../lessons/entities/lesson-progress.entity.js';
 import { CreateCourseDto, UpdateCourseDto, CreateTopicDto, UpdateTopicDto } from './dto/course.dto.js';
 
 @Injectable()
@@ -43,10 +45,14 @@ export class CoursesService {
   }
 
   async searchCourses(query: string, track?: string, level?: string) {
+    // Omitted filters must not appear in the where clause (undefined values made TypeORM throw → 500), and
+    // LIKE wildcards in the query are escaped so they match literally.
+    const term = `%${String(query ?? '').replace(/[%_\\]/g, (ch) => `\\${ch}`)}%`;
+    const filters = { ...(track ? { track } : {}), ...(level ? { level } : {}) };
     return this.courseRepo.find({
       where: [
-        { title: ILike(`%${query}%`), track, level },
-        { description: ILike(`%${query}%`), track, level },
+        { title: ILike(term), ...filters },
+        { description: ILike(term), ...filters },
       ],
       relations: { department: true },
     });
@@ -103,6 +109,30 @@ export class CoursesService {
       where: { userId },
       relations: { course: { department: true } },
     });
-    return enrollments.map((e) => ({ ...e.course, progressPercentage: e.progressPercentage, enrolledAt: e.enrolledAt }));
+    // enrollments.progressPercentage is never written anywhere, so it was always 0. Progress is computed from the
+    // learner's completed lessons in each course (lesson_progress), which is what the lesson pages record.
+    return Promise.all(
+      enrollments.map(async (e) => ({
+        ...e.course,
+        progressPercentage: await this.courseProgressPercent(userId, e.courseId, e.progressPercentage),
+        enrolledAt: e.enrolledAt,
+      })),
+    );
+  }
+
+  /** Completed lessons / total lessons for this learner in a course (0–100). Falls back to the stored value. */
+  async courseProgressPercent(userId: string, courseId: string, stored = 0): Promise<number> {
+    const manager = this.enrollmentRepo.manager;
+    const total = await manager.count(LessonEntity, { where: { courseId } });
+    if (!total) return stored ?? 0;
+    const completed = await manager
+      .createQueryBuilder(LessonProgressEntity, 'p')
+      // lessons.id is uuid, lesson_progress.lessonId is varchar (no FK): compare as text
+      .innerJoin(LessonEntity, 'l', 'CAST(l.id AS text) = p.lessonId')
+      .where('p.userId = :userId', { userId })
+      .andWhere('l.courseId = :courseId', { courseId })
+      .andWhere('p.isCompleted = true')
+      .getCount();
+    return Math.round((completed / total) * 100);
   }
 }

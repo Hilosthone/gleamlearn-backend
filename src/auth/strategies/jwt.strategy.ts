@@ -99,6 +99,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
     return {
       id: user.id,
+      // Aliases: controllers read the learner id as req.user.id, req.user.userId (analytics, goals, planner,
+      // progress, streak, study sessions) or req.user.sub (YouTube). Only `id` was set, so those routes failed
+      // with 500 for every learner (undefined in a where condition).
+      userId: user.id,
+      sub: user.id,
       email: user.email,
       username: user.username,
       role: status.role ?? undefined,

@@ -1702,3 +1702,39 @@ The following routes are guarded **only by `JwtAuthGuard`**, so any signed-in le
 | `oxlint` on the 11 changed source files, compared with `HEAD` | ✅ 8 warnings at `HEAD` vs 7 now; none new. The remaining warnings predate this batch: 6 in `auth.service.ts`, plus the unused `userId` parameter in `users.service.ts`. |
 | **Live** `test/live/learner-session.mjs` (the real frontend `learner-auth.ts`, `onboarding-profile.ts` and `api.ts`) | ✅ **29/29.** Covers: sign-up → verify → sign-in (wrong password gives a generic message) → `/auth/me` with `accountStatus`; onboarding saves (`level`, study time, `notStored`, companion with an injected `userId` ignored); `/users/me` without secrets; exam-prep create 201, cross-user list, get, update and delete 404 with the owner's data intact; a note-`id` hijack blocked; freeze → `/auth/me` frozen, other routes 403 `ACCOUNT_FROZEN`, sign-in allowed → unfreeze; delete with a wrong password 400, then with the right one, after which sign-in is 401; sign-out clears the token. |
 | **Live regressions** | ✅ `backend-workflows.mjs` 54/54, `frontend-clients.mjs` 31/31 |
+
+## Batch 22 (2026-10-12): Phase 3, learner learning experience; probe-driven fixes
+
+**Status:** ✅ Unit tests, type-check and lint. ✅ **Live:** `learner-learning.mjs` 23/23 (new), `learner-session.mjs` 29/29, `backend-workflows.mjs` 54/54 and `frontend-clients.mjs` 31/31. Disposable local database; nothing migrated or deployed.
+
+### How the defects were found
+
+New `test/live/probe-shapes.mjs` calls every learner endpoint the learning pages need, for a fresh learner on the running backend, and prints only response **structure**. It found:
+
+| Endpoint(s) | Before | Root cause | Fix |
+|---|---|---|---|
+| `/streak/*`, `/progress*`, `/mastery*`, `/planner/*`, `/study-sessions/*`, `/analytics/*`, `/goals/*` (`req.user.userId`); `/youtube/*` (`req.user.sub`) | **500 for every learner** | `JwtStrategy.validate()` returned only `id`; these controllers read `userId` or `sub`, so the value was undefined in a TypeORM where clause | `JwtStrategy` also returns `userId` and `sub` (same value as `id`). Additive, and fixes about 55 routes at once. |
+| `GET /courses/search` without `track`/`level` | **500** | `undefined` filters in the where clause | Omitted filters are left out; LIKE wildcards are escaped |
+| `GET /users/me/courses` `progressPercentage` | Always **0** | `enrollments.progressPercentage` is never written by any code | Computed when read: the learner's completed lessons divided by the course's lessons (`lesson_progress` joined with `lessons`; the uuid/varchar join is cast to text, a mismatch found live) |
+| `GET /recommendations` | 503 | Needs the AI service (not running locally) | Unchanged; Phase 6 |
+
+### Files
+
+- Modified:
+  - `src/auth/strategies/jwt.strategy.ts`
+  - `src/courses/courses.service.ts` (`searchCourses`, `findUserEnrolledCourses`, new `courseProgressPercent`)
+  - `src/auth/account-status-enforcement.spec.ts` (+1: id aliases)
+- New:
+  - `src/courses/courses-search.spec.ts` (5)
+  - `test/live/probe-shapes.mjs`
+  - `test/live/learner-learning.mjs`
+
+### Verification
+
+| Command | Result |
+|---|---|
+| Full `npx vitest run` | ✅ **448 passed / 0 failed** (32 files; 442 before) |
+| `npx tsc --noEmit -p tsconfig.build.json` | ✅ exit 0 |
+| `oxlint src/courses src/auth/strategies test/live` | ✅ 0 warnings |
+| **Live** `test/live/learner-learning.mjs` (the real frontend `learning.ts`) | ✅ **23/23.** An admin publishes a course with a topic and 3 lessons. A learner sees it in the catalog, in search, and with the track filter; course, topics and ordered lessons load; enrol → enrolled list; fresh progress is 0 of 3; start → `startedAt`; complete → 1 of 3 = 33% (lesson pages and enrolled list agree); "continue" → lesson 2; lesson content is 2 plain-text paragraphs; XP, coins and streak load; study time loads; the welcome notification is listed; unenrol. |
+| **Live regressions** | ✅ 29/29, 54/54, 31/31 |

@@ -25,6 +25,8 @@ node test/live/start-backend.mjs &               # backend on 127.0.0.1:5055
 node test/live/backend-workflows.mjs             # backend workflows (exit code 1 on any failure)
 node test/live/frontend-clients.mjs ../gleamlearn-landing .   # the real frontend clients against the live backend
 node test/live/learner-session.mjs ../gleamlearn-landing     # Phase 2: learner sign-up/verify/sign-in, onboarding, freeze/delete, ownership
+node test/live/learner-learning.mjs ../gleamlearn-landing    # Phase 3: catalog, enrolment, lessons, progress, stats
+node test/live/probe-shapes.mjs                              # prints the response STRUCTURE of learner endpoints (no values)
 node test/live/e2e-db.mjs drop                   # optional clean-up
 ```
 

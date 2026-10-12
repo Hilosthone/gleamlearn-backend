@@ -173,3 +173,13 @@ describe('GET /auth/me reports accountStatus (additive)', () => {
     expect(res.data).not.toHaveProperty('verificationOtp');
   });
 });
+
+describe('JwtStrategy exposes the learner id under every name controllers read', () => {
+  it('returns id, userId and sub with the same value', async () => {
+    const strategy = Object.create(JwtStrategy.prototype);
+    strategy.accountStatus = { getStatus: vi.fn(async () => active) };
+    strategy.userRepository = { findOne: vi.fn(async () => ({ id: USER_ID, email: 'a@x.test', username: 'ada' })) };
+    const user = await strategy.validate({ method: 'GET', path: '/api/v1/streak' }, { sub: USER_ID, type: 'learner' });
+    expect(user).toMatchObject({ id: USER_ID, userId: USER_ID, sub: USER_ID });
+  });
+});
