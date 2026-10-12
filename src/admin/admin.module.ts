@@ -19,6 +19,7 @@ import { AdminSettingsModule } from './settings/settings.module.js';
 import { AdminSystemModule } from './system/system.module.js';
 import { AdminSecurityModule } from './security/security.module.js';
 import { AdminExportModule } from './export/admin-export.module.js';
+import { AdminContentModule } from './content/admin-content.module.js';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { AdminExportModule } from './export/admin-export.module.js';
     AdminSystemModule,
     AdminSecurityModule,
     AdminExportModule,
+    AdminContentModule,
     
   ],
   exports: [
@@ -63,6 +65,7 @@ import { AdminExportModule } from './export/admin-export.module.js';
     AdminSystemModule,
     AdminSecurityModule,
     AdminExportModule,
+    AdminContentModule,
   ],
 })
 export class AdminModule {}

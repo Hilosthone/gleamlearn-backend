@@ -13,6 +13,8 @@ import {
   getAdminJwtSecret,
   logAdminJwtStatus,
 } from './admin-jwt.config.js';
+import { notImplementedAction } from '../common/not-implemented.js';
+import { permissionsForRole } from './admin-permissions.js';
 
 @Injectable()
 export class AdminAuthService implements OnModuleInit {
@@ -37,8 +39,13 @@ export class AdminAuthService implements OnModuleInit {
    */
   async onModuleInit() {
     logAdminJwtStatus(this.configService);
-    const superAdminEmail = process.env.SUPER_ADMIN_EMAIL || 'gleamlearn.ai@gmail.com';
-    const superAdminPassword = process.env.SUPER_ADMIN_PASSWORD || 'admin@gleamlearn123';
+    const superAdminEmail = process.env.SUPER_ADMIN_EMAIL?.trim();
+    const superAdminPassword = process.env.SUPER_ADMIN_PASSWORD;
+    // No default credentials: the previous fallback password was published in the public repository.
+    if (!superAdminEmail || !superAdminPassword) {
+      console.warn('[Security] SUPER_ADMIN_EMAIL / SUPER_ADMIN_PASSWORD not set: the Super Admin account is not seeded.');
+      return;
+    }
 
     const existingSuperAdmin = await this.adminRepo.findOne({ where: { email: superAdminEmail } });
     if (!existingSuperAdmin) {
@@ -92,24 +99,22 @@ export class AdminAuthService implements OnModuleInit {
       throw new NotFoundException('Admin profile not found');
     }
     const { passwordHash: _, ...result } = admin;
-    return { status: 'success', data: result };
+    // `permissions` lets clients mirror the server policy in their UI; the guard still enforces every route
+    return { status: 'success', data: { ...result, permissions: [...permissionsForRole(admin.role)] } };
   }
 
   logout() {
     return { status: 'success', message: 'Admin logged out successfully' };
   }
 
-  refreshToken(refreshToken: string) {
-    // Implement admin token refresh logic as needed
-    return { status: 'success', message: 'Admin token refreshed successfully', accessToken: 'new-mock-admin-jwt' };
+  refreshToken(_refreshToken: string): never {
+    // Previously returned a fake token ('new-mock-admin-jwt'). Admins sign in again when their token expires.
+    throw notImplementedAction('Admin token refresh', 'sign in again when your admin session expires');
   }
 
-  async forgotPassword(email: string) {
-    const admin = await this.adminRepo.findOne({ where: { email } });
-    if (admin) {
-      // In production, integrate MailService here to send an admin password reset token
-    }
-    return { status: 'success', message: `If the email exists, reset instructions have been sent to ${email}` };
+  async forgotPassword(_email: string): Promise<never> {
+    // Previously claimed reset instructions were sent while nothing was sent.
+    throw notImplementedAction('Admin password reset', 'there is no admin reset flow yet; ask a Super Admin for help');
   }
 
   async resetPassword(body: Record<string, any>) {

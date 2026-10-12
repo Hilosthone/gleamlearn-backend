@@ -3,6 +3,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagg
 import { AuditService } from './audit.service.js';
 import { AuditQueryDto } from './dto/audit-query.dto.js';
 import { AdminJwtAuthGuard } from '../auth/guards/admin-jwt.guard.js';
+import { AdminPermission, RequireAdminPermission } from '../auth/admin-permissions.js';
 
 @ApiTags('Admin Audit Logs')
 @ApiBearerAuth()
@@ -11,6 +12,7 @@ import { AdminJwtAuthGuard } from '../auth/guards/admin-jwt.guard.js';
 export class AuditController {
   constructor(private readonly auditService: AuditService) {}
 
+  @RequireAdminPermission(AdminPermission.SECURITY_VIEW)
   @Get()
   @ApiOperation({ summary: 'List all platform audit logs with pagination and filters (category, action, adminId)' })
   @ApiResponse({ status: 200, description: 'Audit logs retrieved successfully.' })
@@ -18,6 +20,7 @@ export class AuditController {
     return this.auditService.findAll(query);
   }
 
+  @RequireAdminPermission(AdminPermission.SECURITY_VIEW)
   @Get(':id')
   @ApiOperation({ summary: 'Get details for a specific audit log entry by ID' })
   @ApiResponse({ status: 200, description: 'Audit log details retrieved successfully.' })

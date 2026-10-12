@@ -11,11 +11,13 @@ import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard.js';
 import { User } from '../../auth/entities/user.entity.js';
 import { AdminJwtStrategy } from './strategies/admin-jwt.strategy.js';
 import { AdminJwtAuthGuard } from './guards/admin-jwt.guard.js';
+import { AdminPermission, RequireAdminPermission } from './admin-permissions.js';
 import { Admin } from './entity/admin.entity.js';
 import { AdminAuthController } from './admin-auth.controller.js';
 import { AdminAuthService } from './admin-auth.service.js';
 import { AdminExportController } from '../export/admin-export.controller.js';
 import { AdminExportService } from '../export/admin-export.service.js';
+import { AccountStatusService } from '../../auth/account-status.service.js';
 
 const LEARNER_SECRET = 'learner-secret-for-tests-0123456789abcdef';
 const ADMIN_SECRET = 'admin-secret-for-tests-0123456789abcdef-xyz';
@@ -32,9 +34,17 @@ class ProbeController {
   }
 
   @UseGuards(AdminJwtAuthGuard)
+  @RequireAdminPermission(AdminPermission.SELF)
   @Get('admin')
   admin() {
     return { ok: 'admin' };
+  }
+
+  // Deliberately no @RequireAdminPermission: must be denied for every role (default deny)
+  @UseGuards(AdminJwtAuthGuard)
+  @Get('admin-undeclared')
+  undeclared() {
+    return { ok: 'should never be reachable' };
   }
 }
 
@@ -72,6 +82,7 @@ describe('Admin token separation and admin password-reset hardening', () => {
       imports: [PassportModule.register({ defaultStrategy: 'jwt' }), JwtModule.register({})],
       controllers: [ProbeController, AdminAuthController, AdminExportController],
       providers: [
+        { provide: AccountStatusService, useValue: { getStatus: vi.fn(async () => ({ exists: true, restricted: false, restrictionReason: null, frozen: false, deleted: false, role: 'student' })), setRestricted: vi.fn(async () => 1), setFrozen: vi.fn(async () => 1), softDelete: vi.fn(async () => 1) } },
         JwtStrategy,
         AdminJwtStrategy,
         AdminAuthService,
@@ -172,6 +183,12 @@ describe('Admin token separation and admin password-reset hardening', () => {
       expect((await http().get('/probe/admin').set('Authorization', `Bearer ${legacy}`)).status).toBe(401);
     });
 
+    it('a guarded admin route without a declared permission is denied (403) even for a Super Admin', async () => {
+      const res = await http().get('/probe/admin-undeclared').set('Authorization', `Bearer ${adminToken()}`);
+      expect(res.status).toBe(403);
+      expect(res.body.message).toMatch(/no permission policy/);
+    });
+
     it('admin access requires an active admin', async () => {
       admin.isActive = false;
       expect((await http().get('/probe/admin').set('Authorization', `Bearer ${adminToken()}`)).status).toBe(401);
@@ -203,6 +220,7 @@ describe('Admin token separation and admin password-reset hardening', () => {
       expect(me.status).toBe(200);
       expect(me.body.data.email).toBe(ADMIN_EMAIL);
       expect(me.body.data.passwordHash).toBeUndefined();
+      expect(me.body.data.permissions).toEqual(expect.arrayContaining(['admin.self', 'users.delete'])); // Super Admin
     });
 
     it('wrong password is rejected with 401', async () => {

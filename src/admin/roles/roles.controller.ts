@@ -5,6 +5,7 @@ import { CreateRoleDto } from './dto/create-role.dto.js';
 import { UpdateRoleDto } from './dto/update-role.dto.js';
 import { AssignPermissionsDto } from './dto/assign-permissions.dto.js';
 import { AdminJwtAuthGuard } from '../auth/guards/admin-jwt.guard.js';
+import { AdminPermission, RequireAdminPermission } from '../auth/admin-permissions.js';
 
 @ApiTags('Admin Roles & Permissions')
 @ApiBearerAuth()
@@ -13,6 +14,7 @@ import { AdminJwtAuthGuard } from '../auth/guards/admin-jwt.guard.js';
 export class RolesController {
   constructor(private readonly rolesService: RolesService) {}
 
+  @RequireAdminPermission(AdminPermission.ROLES_MANAGE)
   @Get('roles')
   @ApiOperation({ summary: 'List all custom administrative roles with permissions' })
   @ApiResponse({ status: 200, description: 'Roles retrieved successfully.' })
@@ -20,6 +22,7 @@ export class RolesController {
     return this.rolesService.findAllRoles();
   }
 
+  @RequireAdminPermission(AdminPermission.ROLES_MANAGE)
   @Post('roles')
   @ApiOperation({ summary: 'Create a new administrative role' })
   @ApiResponse({ status: 201, description: 'Role created successfully.' })
@@ -27,6 +30,7 @@ export class RolesController {
     return this.rolesService.createRole(dto);
   }
 
+  @RequireAdminPermission(AdminPermission.ROLES_MANAGE)
   @Get('roles/:id')
   @ApiOperation({ summary: 'Get details for a specific role by ID' })
   @ApiResponse({ status: 200, description: 'Role retrieved successfully.' })
@@ -34,6 +38,7 @@ export class RolesController {
     return this.rolesService.findRoleById(id);
   }
 
+  @RequireAdminPermission(AdminPermission.ROLES_MANAGE)
   @Patch('roles/:id')
   @ApiOperation({ summary: 'Update an administrative role' })
   @ApiResponse({ status: 200, description: 'Role updated successfully.' })
@@ -41,6 +46,7 @@ export class RolesController {
     return this.rolesService.updateRole(id, dto);
   }
 
+  @RequireAdminPermission(AdminPermission.ROLES_MANAGE)
   @Delete('roles/:id')
   @ApiOperation({ summary: 'Delete an administrative role' })
   @ApiResponse({ status: 200, description: 'Role deleted successfully.' })
@@ -48,6 +54,7 @@ export class RolesController {
     return this.rolesService.deleteRole(id);
   }
 
+  @RequireAdminPermission(AdminPermission.ROLES_MANAGE)
   @Get('permissions')
   @ApiOperation({ summary: 'List all available system permissions' })
   @ApiResponse({ status: 200, description: 'Permissions retrieved successfully.' })
@@ -55,6 +62,7 @@ export class RolesController {
     return this.rolesService.findAllPermissions();
   }
 
+  @RequireAdminPermission(AdminPermission.ROLES_MANAGE)
   @Post('roles/:id/permissions')
   @ApiOperation({ summary: 'Assign permissions to a specific role' })
   @ApiResponse({ status: 200, description: 'Permissions assigned successfully.' })
@@ -62,6 +70,7 @@ export class RolesController {
     return this.rolesService.assignPermissions(id, dto);
   }
 
+  @RequireAdminPermission(AdminPermission.ROLES_MANAGE)
   @Delete('roles/:id/permissions')
   @ApiOperation({ summary: 'Revoke permissions from a specific role' })
   @ApiResponse({ status: 200, description: 'Permissions revoked successfully.' })

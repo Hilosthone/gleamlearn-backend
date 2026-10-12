@@ -113,6 +113,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { ExamPrepService } from './exam-prep.service.js';
 import { CreateExamPrepDto } from './dto/create-exam-prep.dto.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
+import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
 
 @ApiTags('Examination Preparation & Past Questions')
 @ApiBearerAuth()
@@ -181,21 +182,21 @@ export class ExamPrepController {
     summary: 'Create exam preparation plan',
     description: 'Create a personalized study schedule and target prep plan for an upcoming examination.'
   })
-  createPrep(@Body() dto: CreateExamPrepDto) { return this.service.createPrepPlan(dto); }
+  createPrep(@CurrentUser('id') userId: string, @Body() dto: CreateExamPrepDto) { return this.service.createPrepPlan(userId, dto); }
 
   @Get('exam-prep')
   @ApiOperation({
     summary: 'Retrieve all exam prep plans',
     description: 'Fetch all saved examination preparation plans for the authenticated user.'
   })
-  getPreps() { return this.service.findAllPrepPlans(); }
+  getPreps(@CurrentUser('id') userId: string) { return this.service.findAllPrepPlans(userId); }
 
   @Get('exam-prep/:id')
   @ApiOperation({
     summary: 'Get exam prep plan by ID',
     description: 'Fetch details of a specific examination preparation plan by its unique identifier.'
   })
-  getPrepById(@Param('id') id: string) { return this.service.findPrepPlanById(id); }
+  getPrepById(@CurrentUser('id') userId: string, @Param('id') id: string) { return this.service.findPrepPlanById(id, userId); }
 
   @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 10, ttl: 60000 } })
   @Patch('exam-prep/:id')
@@ -203,7 +204,7 @@ export class ExamPrepController {
     summary: 'Update exam prep plan',
     description: 'Modify target dates, target subjects, or study layouts for an existing examination preparation plan.'
   })
-  updatePrep(@Param('id') id: string, @Body() dto: Partial<CreateExamPrepDto>) { return this.service.updatePrepPlan(id, dto); }
+  updatePrep(@CurrentUser('id') userId: string, @Param('id') id: string, @Body() dto: Partial<CreateExamPrepDto>) { return this.service.updatePrepPlan(id, userId, dto); }
 
   @Throttle({ short: { limit: 1, ttl: 5000 }, long: { limit: 5, ttl: 60000 } })
   @Delete('exam-prep/:id')
@@ -211,5 +212,5 @@ export class ExamPrepController {
     summary: 'Delete exam prep plan',
     description: 'Permanently remove an examination preparation plan from the system.'
   })
-  deletePrep(@Param('id') id: string) { return this.service.deletePrepPlan(id); }
+  deletePrep(@CurrentUser('id') userId: string, @Param('id') id: string) { return this.service.deletePrepPlan(id, userId); }
 }

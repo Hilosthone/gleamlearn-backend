@@ -16,7 +16,8 @@
 
 | Variable | Required? | Used for | If missing today | If missing after B10 (proposed) | Render ✅ | Local ✅ |
 |---|---|---|---|---|---|---|
-| `JWT_SECRET` | **Yes** (≥ 32 chars) | Signing and verifying user and admin JWTs | Starts with a **public hard-coded fallback secret** (tokens forgeable) | **Won't start** | | |
+| `JWT_SECRET` | **Yes** (≥ 32 chars) | Signing and verifying **learner** JWTs | Since Batch 20: **no fallback.** The backend starts, but learner sign-in and sign-up answer **503** and every learner token is rejected (401). Before Batch 20, a public hard-coded fallback secret was used and tokens were forgeable. | **Won't start** | | |
+| `AUTH_CODE_REQUIRES_EMAIL` | No (default `true`) | Batch 20: `verify-email` and `reset-password` require `email`, so each code is checked against one account only | Required (secure default) | n/a | | |
 | `ADMIN_JWT_SECRET` | **Yes** (≥ 32 chars, **different from `JWT_SECRET`**) | Signing and verifying **admin** JWTs only (backend Batch 17-security) | n/a before that batch | Backend **starts**, but admin login, every admin route and admin reset return **503**, with an error log naming the variable. Learner features are unaffected. There is no fallback. | | |
 | `ADMIN_JWT_EXPIRES_IN` | No (default `8h`) | Admin token lifetime | Default | Default | | |
 | `JWT_EXPIRES_IN` | No (default `7d`) | Token lifetime | Default used | Default used | | |
@@ -32,10 +33,10 @@
 | `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | **Yes** for uploads | Cloudinary SDK | Uploads fail | Warn | | |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` | **Yes** for signup verification and password reset | Email delivery | Emails fail (logged warning) | Warn | | |
 | `FRONTEND_URL` | No (default `https://gleamlearn.vercel.app`) | Links in emails | Default | Default | | |
-| `SUPER_ADMIN_EMAIL`, `SUPER_ADMIN_PASSWORD` | **Yes** (until seeding changes) | Super Admin seeding at startup | **Seeds with public hard-coded defaults** | Seeding skipped with a warning (no defaults) | | |
+| `SUPER_ADMIN_EMAIL`, `SUPER_ADMIN_PASSWORD` | **Yes** (until seeding changes) | Super Admin seeding at startup | Since Batch 20: **not seeded** (warning logged). Before, it seeded with a public hard-coded default password. | Seeding skipped with a warning (no defaults) | | |
 | `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY` | No | Push notifications | Push disabled or fails | Warn | | |
 | `YOUTUBE_API_KEY` | No | YouTube title and thumbnail metadata | Generic title used | Warn | | |
-| `ALOC_API_KEY`, `ALOC_BASE_URL` | No | Past-question import (exam prep) | That feature fails | Warn | | |
+| `ALOC_API_KEY`, `ALOC_BASE_URL` | No | Past-question import (exam prep) | Since Batch 20: past questions that aren't cached locally answer **503** (the key committed in source was removed; **rotate it**, as it is still in git history) | Warn | | |
 | `PORT` | No (Render sets it) | Listen port | `5000` | `5000` | | |
 | `LEGACY_FILES_ACCESS` | **Only after the B4 migration** | Fail-closed legacy file visibility (see design) | n/a (not read yet) | Default `hidden` | | |
 | `LEGACY_ASSESSMENTS_ACCESS` | **Only after the B6 migration** | Fail-closed legacy quiz/test/exam visibility | n/a (not read yet) | Default `hidden` | | |
@@ -84,4 +85,50 @@ python -c "import os,hashlib; print(hashlib.sha256(os.environ.get('AI_API_KEY','
 4. `NODE_ENV=production` is set on the backend.
 5. `DB_SYNCHRONIZE` is unset or `false`.
 6. `CLOUDINARY_CLOUD_NAME` is set. Without it, document-based AI generation is refused.
-7. Then tell me the configuration is confirmed, and I'll implement the B10 fail-fast validation. It adds no insecure fallbacks and puts no values in logs.
+7. `JWT_SECRET` **is set on Render** (Batch 20 removed the fallback; without it, learner sign-in is disabled after the next deploy). Check with the value-free command in section 3.
+8. `SUPER_ADMIN_EMAIL` and `SUPER_ADMIN_PASSWORD` are set if the Super Admin doesn't exist yet in that database.
+9. `ALOC_API_KEY` has been **rotated** at the provider (the old key is in the public git history) and the new value set on Render.
+10. Any client other than this web frontend (e.g. a mobile app) that calls `POST /auth/verify-email` or `/auth/reset-password` sends `email`. Otherwise, set `AUTH_CODE_REQUIRES_EMAIL=false` temporarily, which is **not recommended**.
+11. Then tell me the configuration is confirmed, and I'll implement the B10 fail-fast validation. It adds no insecure fallbacks and puts no values in logs.
+
+---
+
+## 5. `ADMIN_JWT_SECRET`: rules, secure setup, verification
+
+**Rules enforced by the code** (`src/admin/auth/admin-jwt.config.ts`, `getAdminJwtSecret`):
+
+| Rule | Effect if violated |
+|---|---|
+| Must be set (the value is trimmed) | Admin auth disabled → 503 |
+| Length ≥ 32 characters after trimming | Admin auth disabled → 503 |
+| Must not equal `JWT_SECRET` (after trimming) | Admin auth disabled → 503 |
+| Any characters are allowed; HS256 signing | — |
+
+There is no fallback. A violation never weakens admin auth: login, `/admin/auth/me`, every admin route and admin reset return **503 "Admin authentication is not configured."** The backend still starts and learners are unaffected. At startup it logs `Admin authentication is DISABLED: <rule>` (the rule name only, never the value).
+
+**Optional:** `ADMIN_JWT_EXPIRES_IN` (default `8h`; a jsonwebtoken duration such as `4h` or `30m`).
+
+**Local status (checked 2026-10-12, value not printed):** set, 64 characters, no surrounding whitespace or quotes, defined once, and different from `JWT_SECRET`. ✅ Valid.
+
+**Secure configuration on Render (owner):**
+1. Generate the value on a trusted machine, for example `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"`, and paste it directly into Render → backend service → **Environment** → `ADMIN_JWT_SECRET`. Don't store it in chat, tickets or the repository.
+2. Use a different value from `JWT_SECRET`, and don't reuse it in any other service.
+3. Save. Render redeploys or restarts only when you trigger it; doing so is the deployment step below.
+
+**Verifying on Render without revealing the value** (Render Shell for the backend):
+
+```sh
+node -e "const a=(process.env.ADMIN_JWT_SECRET||'').trim(), j=(process.env.JWT_SECRET||'').trim(); console.log('set:', !!a, '| length>=32:', a.length>=32, '| differs from JWT_SECRET:', a!==j)"
+```
+
+All three should print `true`.
+
+**Deployment order and checks:**
+1. Confirm the three checks above (done locally; Render pending your check).
+2. Deploy the backend.
+3. The logs must contain **no** line starting `Admin authentication is DISABLED`.
+4. `POST /api/v1/admin/auth/login` with an admin's email and password must return `201` with `accessToken`. Don't paste the token anywhere.
+5. `GET /api/v1/admin/auth/me` with `Authorization: Bearer <that token>` must return `200` with the admin profile and no `passwordHash`.
+6. The same request with a **learner** token must return `401`.
+7. Old admin tokens (signed with `JWT_SECRET` before this change) must return `401`. Admins sign in again.
+8. **If step 3 or 4 shows 503:** fix the variable and restart. Don't roll back (rolling back reopens the fixed vulnerabilities).

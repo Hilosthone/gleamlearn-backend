@@ -45,6 +45,7 @@ import { AuthService } from './auth.service.js';
 import { AuthController } from './auth.controller.js';
 import { User } from './entities/user.entity.js';
 import { JwtStrategy } from './strategies/jwt.strategy.js';
+import { AccountStatusService } from './account-status.service.js';
 import { MailModule } from '../mail/mail.module.js'; 
 import { NotificationsModule } from '../notifications/notifications.module.js'; // <-- 1. Import NotificationsModule
 
@@ -57,7 +58,8 @@ import { NotificationsModule } from '../notifications/notifications.module.js'; 
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('JWT_SECRET') || 'super-secret-jwt-key',
+        // No fallback: without JWT_SECRET, sign-in answers 503 (see learner-jwt.config.ts)
+        secret: config.get<string>('JWT_SECRET')?.trim() || undefined,
         signOptions: { 
           expiresIn: (config.get<string>('JWT_EXPIRES_IN') || '7d') as any, 
         },
@@ -67,7 +69,7 @@ import { NotificationsModule } from '../notifications/notifications.module.js'; 
     NotificationsModule,
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy],
-  exports: [JwtStrategy, PassportModule, JwtModule, MailModule, NotificationsModule], // Optional: exported so other modules can access it if needed
+  providers: [AuthService, JwtStrategy, AccountStatusService],
+  exports: [JwtStrategy, AccountStatusService, PassportModule, JwtModule, MailModule, NotificationsModule], // Optional: exported so other modules can access it if needed
 })
 export class AuthModule {}

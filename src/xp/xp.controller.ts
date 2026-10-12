@@ -6,6 +6,8 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import { Request } from 'express';
 import { XpService } from './xp.service.js';
 import { AwardXpDto } from './dto/award-xp.dto.js';
+import { AdminOnly } from '../admin/auth/admin-only.decorator.js';
+import { AdminPermission } from '../admin/auth/admin-permissions.js';
 
 interface RequestWithUser extends Request {
   user: {
@@ -16,12 +18,12 @@ interface RequestWithUser extends Request {
 
 @ApiTags('XP & Gamification')
 @ApiBearerAuth()
-@UseGuards(AuthGuard('jwt'))
 @Controller('api/v1/xp')
 export class XpController {
   constructor(private readonly xpService: XpService) {}
 
   @Throttle({ short: { limit: 2, ttl: 2000 }, long: { limit: 20, ttl: 60000 } })
+  @UseGuards(AuthGuard('jwt'))
   @Get()
   @ApiOperation({ 
     summary: 'Get XP Overview', 
@@ -34,6 +36,7 @@ export class XpController {
   }
 
   @Throttle({ short: { limit: 2, ttl: 2000 }, long: { limit: 20, ttl: 60000 } })
+  @UseGuards(AuthGuard('jwt'))
   @Get('level')
   @ApiOperation({ 
     summary: 'Get Level Details', 
@@ -45,6 +48,7 @@ export class XpController {
   }
 
   @Throttle({ short: { limit: 2, ttl: 2000 }, long: { limit: 15, ttl: 60000 } })
+  @UseGuards(AuthGuard('jwt'))
   @Get('history')
   @ApiOperation({ 
     summary: 'Get XP History', 
@@ -56,6 +60,7 @@ export class XpController {
   }
 
   @Throttle({ short: { limit: 2, ttl: 2000 }, long: { limit: 15, ttl: 60000 } })
+  @UseGuards(AuthGuard('jwt'))
   @Get('transactions')
   @ApiOperation({ 
     summary: 'Get XP Transactions', 
@@ -67,6 +72,8 @@ export class XpController {
   }
 
   @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 10, ttl: 60000 } })
+  // Granting XP is an administrator action (users.manage); learners earn XP only through server-side rewards
+  @AdminOnly(AdminPermission.USERS_MANAGE)
   @Post('award')
   @ApiOperation({ 
     summary: 'Award XP to User (Admin)', 

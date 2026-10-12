@@ -3,6 +3,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagg
 import { SettingsService } from './settings.service.js';
 import { UpdateSystemSettingsDto } from './dto/update-system-settings.dto.js';
 import { AdminJwtAuthGuard } from '../auth/guards/admin-jwt.guard.js';
+import { AdminPermission, RequireAdminPermission } from '../auth/admin-permissions.js';
 
 @ApiTags('Admin System Configuration')
 @ApiBearerAuth()
@@ -11,6 +12,7 @@ import { AdminJwtAuthGuard } from '../auth/guards/admin-jwt.guard.js';
 export class SettingsController {
   constructor(private readonly settingsService: SettingsService) {}
 
+  @RequireAdminPermission(AdminPermission.SETTINGS_MANAGE)
   @Get()
   @ApiOperation({ summary: 'Retrieve current platform-wide system settings and configuration limits' })
   @ApiResponse({ status: 200, description: 'Settings retrieved successfully.' })
@@ -18,6 +20,7 @@ export class SettingsController {
     return this.settingsService.getSettings();
   }
 
+  @RequireAdminPermission(AdminPermission.SETTINGS_MANAGE)
   @Patch()
   @ApiOperation({ summary: 'Update system configuration values (XP/Coin tables, AI limits, maintenance mode, etc.)' })
   @ApiResponse({ status: 200, description: 'Settings updated successfully and logged.' })

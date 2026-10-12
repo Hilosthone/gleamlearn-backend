@@ -49,7 +49,7 @@ export class AuthController {
   @Post('verify-email')
   @ApiOperation({ summary: 'Verify user email address' })
   verifyEmail(@Body() body: VerifyEmailDto) {
-    return this.authService.verifyEmail(body.token);
+    return this.authService.verifyEmail(body);
   }
 
   @Post('resend-verification')

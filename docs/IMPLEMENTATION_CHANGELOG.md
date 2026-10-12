@@ -1253,3 +1253,452 @@ The 26 tests, run over real HTTP through the real strategies, guards, `AdminAuth
   - `AdminUsersQueryDto.limit` is capped at 100 (`@Max(100)`).
   - Tests: `src/admin/users/admin-users-sanitize.spec.ts` (3). Full suite: **138 passed / 0 failed**.
 - **Recorded backend defects (not fixed):** `PATCH /admin/users/:id/suspend`, `/unsuspend`, `/freeze`, `/unfreeze`, `/verify` and `/unverify` write an action log and return success **without changing the user**. Fixing them depends on the B2 user-entity reconciliation (`isFrozen` and `deletedAt` exist only on the second `users` entity). The admin UI shows these actions disabled.
+
+---
+
+## Batch 18-security (2026-10-12): Per-role admin permissions and honest account actions
+
+**Status:** ✅ Verified by tests, with the real guard and strategy over HTTP. ⬜ Not deployed.
+
+### Roles actually supported
+
+- `admins.role` is a fixed enum: Super Admin, Admin, Moderator, Content Admin, Finance Admin, Support Admin, Analyst.
+- The `roles` and `permissions` tables (with CRUD under `/admin/roles` and `/admin/permissions`) are **not linked to admins**, and were never used for authorization. They remain as data; their management routes now require `roles.manage` (Super Admin only).
+
+### Server-side permissions (`src/admin/auth/admin-permissions.ts`)
+
+`AdminJwtAuthGuard` now **authenticates and then authorizes**. Each route declares `@RequireAdminPermission(...)`, and the guard checks the admin's role against `ROLE_PERMISSIONS`. **Default deny:** a guarded route with no declared permission gets 403 for every role. All **109** guarded admin routes are annotated, and a test enforces that.
+
+| Permission | Routes | Super Admin | Admin | Moderator | Content | Finance | Support | Analyst |
+|---|---|---|---|---|---|---|---|---|
+| `admin.self` | `GET /admin/auth/me` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `users.view` | `GET /admin/users`, `/:id`, `/:id/profile`, `/activity`, `/progress`, `/analytics` | ✅ | ✅ | ✅ | | | ✅ | |
+| `users.manage` | user verify/unverify, suspend/unsuspend, freeze/unfreeze, reset-password; security restrict/unrestrict/force-logout; XP/coin adjustments | ✅ | ✅ | | | | ✅ | |
+| `users.delete` | `DELETE /admin/users/:id` | ✅ | | | | | | |
+| `analytics.view` | `/admin/dashboard/*`, `/admin/analytics/*`, `/admin/activity/*`, gamification overviews | ✅ | ✅ | | | ✅ | | ✅ |
+| `content.manage` | `/admin/courses/*`, `/admin/questions/*` | ✅ | ✅ | | ✅ | | | |
+| `moderation.manage` | `/admin/reports/*`, `/admin/ai/generated-content/*` | ✅ | ✅ | ✅ | | | | |
+| `notifications.send` | `/admin/notifications/*` | ✅ | ✅ | | | | ✅ | |
+| `finance.view` / `finance.manage` | `/admin/finance/*`, `GET /admin/subscriptions*` / subscription update, cancel, refund | ✅ | | | | ✅ | | |
+| `security.view` | `/admin/security/events`, `/suspicious-users`, `/admin/audit-logs/*` | ✅ | ✅ | | | | | |
+| `system.view` | `/admin/system/*` | ✅ | ✅ | | | | | |
+| `settings.manage` | `/admin/settings` (GET, PATCH) | ✅ | | | | | | |
+| `roles.manage` | `/admin/roles/*`, `/admin/permissions` | ✅ | | | | | | |
+| `data.export` | `/admin/export/*` | ✅ | | | | | | |
+
+**Unguarded by design:** `POST /admin/auth/login`, `logout`, `refresh`, `forgot-password` and `reset-password`. The last three now refuse; see below.
+
+### Account actions: verified behaviour
+
+| Endpoint | Before | Now |
+|---|---|---|
+| `PATCH /admin/users/:id/suspend`, `/unsuspend`, `/freeze`, `/unfreeze` | Logged an action and returned success; **the user was unchanged** | **501**, no log entry, no change |
+| `PATCH /admin/users/:id/verify`, `/unverify` | Same fake success | **Implemented:** sets `isEmailVerified`. Response adds `data: { userId, isEmailVerified }`. Note that sign-in doesn't require verification, so this changes the recorded and displayed status. |
+| `POST /admin/users/:id/restrict`, `/unrestrict` (security) | Persisted `isRestricted`, but **neither login nor `JwtStrategy` checks it**, so restricted users kept full access | **501**. Enforcing restriction in learner sign-in and the JWT strategy is a learner-auth behaviour change; awaiting your decision. Existing `isRestricted` values are untouched. |
+| `POST /admin/users/:id/force-logout` | Cleared the unused `refreshToken`; access JWTs stayed valid | **501** (there is no token revocation) |
+| `DELETE /admin/users/:id` | Worked | Unchanged behaviour, now **Super Admin only**. Malformed IDs → 404 before any query. The action is logged before removal. Deletion **cascades** (database `onDelete: CASCADE`) to coin transactions, flashcard decks, user achievements, user badges and XP transactions. User-owned rows **without** a foreign key (for example tutor sessions, AI conversations, YouTube resources) stay orphaned. **Repeat after success:** a second DELETE gets 404, so a client can tell "already deleted" after a timeout. |
+| `PATCH /admin/users/:id/reset-password` | Works (sets the learner's password hash) | Unchanged; `users.manage` |
+| `POST /admin/auth/refresh` | Returned a **fake token** (`'new-mock-admin-jwt'`) | **501**. Admins sign in again. |
+| `POST /admin/auth/forgot-password` | Claimed instructions were sent; nothing was sent | **501** |
+| `POST /admin/auth/reset-password` | (Batch 17-security) | Unchanged: only a proper `admin_password_reset` token is accepted, and none is issued |
+| Admin change-password | Doesn't exist | Not implemented; documented |
+
+**`GET /admin/auth/me`:** the guard verifies the token with `ADMIN_JWT_SECRET`, requires `type: 'admin'`, loads the admin by `sub`, and requires `isActive`. The service reloads the admin and strips `passwordHash`. A deleted or deactivated admin is rejected by the guard with **401** before the service runs. These behaviours are verified by tests (`admin-token-security.spec.ts`: login → `/me` returns the profile without `passwordHash`; an inactive admin → 401).
+
+### Files changed
+
+- New:
+  - `src/admin/auth/admin-permissions.ts`
+  - `src/admin/common/not-implemented.ts`
+  - `src/admin/auth/admin-permissions.spec.ts`
+- Modified:
+  - `src/admin/auth/guards/admin-jwt.guard.ts` (permission check, default deny)
+  - All 19 admin controllers (one `@RequireAdminPermission` per guarded route, plus the import)
+  - `src/admin/users/users.service.ts`
+  - `src/admin/security/security.service.ts`
+  - `src/admin/auth/admin-auth.service.ts`
+  - Specs updated for intended behaviour: `src/admin/auth/admin-token-security.spec.ts` (probe routes declare permissions, plus a new default-deny test) and `src/admin/users/admin-users-sanitize.spec.ts` (UUID ids)
+- Docs: `docs/CONFIGURATION_CHECKLIST.md`, section 5 (`ADMIN_JWT_SECRET` rules, Render setup, verification, deployment checks)
+
+### API compatibility
+
+- Paths are unchanged. Behaviour changes:
+  - Roles without the required permission now get **403**. Before, any active admin could do everything.
+  - The ineffective actions (suspend, freeze, restrict, force-logout, refresh, forgot-password) now return **501** instead of a false success.
+  - `verify` and `unverify` now really change the user, and add a `data` field to the response.
+  - Malformed user IDs get 404 (before: 500 from the uuid cast).
+- No admin frontend depended on the old behaviour; the console from Batch 17 already showed these actions as disabled.
+
+### Database impact
+
+- No schema change and no migration.
+- `verify` and `unverify` now write `users.isEmailVerified`, as they always claimed to.
+- The 501 endpoints no longer write misleading `admin_user_actions` rows. Existing rows are kept.
+
+### Testing
+
+| Command | Result |
+|---|---|
+| `npx vitest run src/admin` | ✅ 66 tests (3 files) |
+| Full `npx vitest run` | ✅ **175 passed / 0 failed** (21 files) |
+| `npx tsc --noEmit -p tsconfig.build.json` | ✅ |
+| `oxlint src/admin` | No new warnings. One unused import I introduced was removed; the remaining warning is the pre-existing empty file `security/entities/user.entity.ts`. |
+
+The new `admin-permissions.spec.ts` covers:
+- **Coverage:** all 109 guarded routes across the 19 admin controllers declare a permission, and only the 5 public admin-auth routes are unguarded.
+- **Least privilege:** only Super Admin has delete, export, settings and roles; unknown or missing roles get nothing; every enum role is mapped.
+- **HTTP through the real guard and strategy:**
+  - Six non-Super-Admin roles get 403 on DELETE, with nothing removed or logged.
+  - Super Admin delete is logged and then removed.
+  - Delete of a missing or malformed ID → 404.
+  - 13 role/route denials (users view and verify, dashboard, course create, settings, roles, export, restrict) → 403 with the service never called.
+  - 7 role/route grants are allowed.
+  - Verify and unverify really persist.
+  - Suspend, unsuspend, freeze and unfreeze → 501 with no save and no log.
+  - A learner-secret token with a Super-Admin-shaped payload → 401.
+- **Default deny** (`admin-token-security.spec.ts`): a guarded route with no permission → 403 even for a Super Admin.
+
+### Outstanding (needs a decision)
+
+1. Enforce `isRestricted` in learner login and in `JwtStrategy` (this changes learner access for any already-restricted accounts), then re-enable restrict and unrestrict. Suspend and freeze would map onto the same mechanism once B2 resolves the duplicate `users` entity.
+2. Token revocation (force-logout) needs a token version or denylist: a schema change.
+3. An admin password change/reset flow.
+4. Admin-account management: there are no endpoints to create admins or change their roles. Roles can only be changed in the database today.
+
+---
+
+## Batch 18b (2026-10-12): Flashcards routes available under `/api/v1` (backward compatible)
+
+**Status:** ✅ Verified by routing tests through the real `JwtStrategy`, with a negative control.
+
+- **Problem:** `FlashcardsController` was mounted at `/flashcards` and `FlashcardDecksController` at `/flashcard-decks`. Every other controller uses `/api/v1/...`, and `main.ts` sets no global prefix. All 12 flashcards calls in the frontend (`/api/v1/flashcards…`, `/api/v1/flashcard-decks…`) returned 404.
+- **Fix:** `@Controller(['api/v1/flashcards', 'flashcards'])` and `@Controller(['api/v1/flashcard-decks', 'flashcard-decks'])`. It is the **same controller class**, so both paths share the same handlers, the class-level `JwtAuthGuard`, the throttling and the service. No business logic is duplicated. The unprefixed paths are kept for existing clients and marked deprecated in a code comment. No other endpoints changed.
+- **Files:**
+  - Modified: `src/flashcards/flashcards.controller.ts`, `src/flashcards/flashcard-decks.controller.ts`
+  - New: `src/flashcards/flashcards-routes.spec.ts`
+- **API compatibility:** purely additive. The old paths behave exactly as before, and the new `/api/v1` paths match the frontend.
+- **Database impact:** none. **Configuration:** none.
+
+### Testing
+
+| Command | Result |
+|---|---|
+| `npx vitest run src/flashcards` | ✅ **53 tests** |
+| **Negative control** (the `HEAD` controllers temporarily restored, then put back from saved copies and verified with `cmp`) | **28 fail** (the `/api/v1` cases), legacy cases pass. With the fix: 53/53. |
+| Contract audit (frontend `lib/api.ts` against the backend `@Controller` routes, now including array prefixes) | ✅ **0 of 316** frontend calls without a matching backend route (was 12). Backend routes: 457. |
+| Full `npx vitest run` | ✅ **228 passed / 0 failed** (22 files) |
+| `npx tsc --noEmit -p tsconfig.build.json` | ✅ |
+
+What the 53 tests cover, for **both** path forms:
+- All 12 frontend calls reach the right service method, scoped to the authenticated learner.
+- All 12 return 401 without a token, and never reach the service.
+- An admin-typed token is rejected.
+- A service 404 propagates identically.
+- Both prefixes hit the same handler, and `review/today` isn't captured by `:id`.
+
+---
+
+## Batch 18c (backend part of admin Batch 18, 2026-10-12)
+
+- **`GET /admin/auth/me`** now also returns `data.permissions`: the permission names granted to the caller's role. This is additive. Clients use it for UI hints; the guard still enforces every route.
+- **New `GET /api/v1/admin/dashboard/counts`** (`analytics.view`; additive, read-only). Exact counts from existing tables: learners; new learners in the last 30 days; learner courses (`courses`); quizzes; tests; exams; uploaded files; YouTube resources; AI tutor sessions; AI assistant conversations; and the positive sums of `xp_transactions.amount` and `coin_transactions.amount`. A failing query yields `null` and appears in `unavailable`. It is never estimated, and its error text is never returned. **The existing `/admin/dashboard` and `/admin/analytics/*` endpoints are unchanged; they still return constants and placeholders.**
+- **Verified but not connected (findings):**
+  - Admin course CRUD (`/admin/courses`) writes to a **separate `admin_courses` table that nothing else reads**. Publishing there does not affect the learner catalog (`courses`).
+  - `/admin/settings` values (`system_settings`) are **stored but never read** by the platform.
+  - **All** `/admin/analytics/*` handlers return hard-coded numbers.
+- **Files:**
+  - Modified: `src/admin/auth/admin-auth.service.ts`, `src/admin/dashboard/dashboard.service.ts`, `src/admin/dashboard/dashboard.controller.ts`, `src/admin/auth/admin-permissions.spec.ts` (110 guarded routes; counts route allowed for Analyst, denied for Support Admin), `src/admin/auth/admin-token-security.spec.ts` (`/me` includes permissions)
+  - New: `src/admin/dashboard/dashboard-counts.spec.ts` (2 tests: exact values with null sums → 0; a failing metric → null and listed, without leaking its error)
+- **Verification:**
+
+  | Command | Result |
+  |---|---|
+  | Full `npx vitest run` | ✅ **232 passed / 0 failed** (23 files) |
+  | `npx tsc --noEmit -p tsconfig.build.json` | ✅ |
+  | `oxlint src/admin src/flashcards` | No new warnings. The 4 remaining are in files untouched since `HEAD`. |
+
+- **Not verified:** the counts endpoint against a real database (the repositories were mocked). It needs the tables to exist; if one is missing, that count is reported unavailable.
+
+## Batch 19 (2026-10-12): Account-status enforcement, admin learning-content API, user-deletion review
+
+**Status:** ✅ Unit and HTTP tests, type-check. 🟡 Not run against a live database. Nothing migrated or deployed, and no data changed.
+
+### 19a. Account restrictions are enforced (Decision 1, approved)
+
+**Problem.** `is_restricted`, `isFrozen` and `deletedAt` existed but nothing checked them. Suspended learners could sign in, and existing tokens kept working. Learner freeze, unfreeze and delete called `update()` with properties the auth `User` entity doesn't declare (B2: two `User` entities share the `users` table).
+
+**Implementation: `src/auth/account-status.service.ts`** (registered and exported by the `@Global` `AuthModule`).
+- Raw, parameterized SQL against `users`. At startup it detects which of `is_restricted`, `restriction_reason`, `isFrozen`, `deletedAt` and `role` exist, so a missing column degrades to "not set" instead of breaking sign-in. No schema change.
+- **State precedence:** deleted > restricted > frozen > active.
+
+| State | Sign-in | Requests with an existing token |
+|---|---|---|
+| Missing or soft-deleted | 401 with the generic "Invalid email or password" (no enumeration) | 401 |
+| Restricted (includes admin suspend) | **403 `{ code: 'ACCOUNT_RESTRICTED' }`** | **403 `ACCOUNT_RESTRICTED`** on every route |
+| Frozen (learner-initiated) | Allowed; the response adds `accountStatus: 'frozen'` | 403 `ACCOUNT_FROZEN`, except `GET /api/v1/users/me`, `GET /api/v1/auth/me`, `POST /api/v1/users/me/unfreeze` and `POST /api/v1/auth/logout` |
+
+- **`JwtStrategy`** (`passReqToCallback`) re-checks status on every request, so restriction takes effect without token revocation. `role` now comes from the status query.
+- **Learner freeze, unfreeze and soft delete** go through the service. **Unfreeze no longer clears `deletedAt`**: before, it could resurrect a soft-deleted account.
+- **Admin:**
+  - `PATCH /admin/users/:id/suspend` and `/unsuspend` set and clear `is_restricted`, with the reason "Suspended by an administrator".
+  - `POST /admin/users/:id/restrict { reason }` and `/unrestrict` are real and write a SECURITY audit-log entry.
+  - All require `users.manage`.
+  - Admin freeze and unfreeze stay **501** (freezing is learner-controlled), and force-logout stays **501**: individual tokens can't be revoked, so suspend instead.
+
+**Files.**
+- New:
+  - `src/auth/account-status.service.ts`
+  - `src/auth/account-status.service.spec.ts`
+  - `src/auth/account-status-enforcement.spec.ts` (43 tests across the two new specs)
+- Modified:
+  - `src/auth/auth.module.ts`
+  - `src/auth/auth.service.ts`
+  - `src/auth/strategies/jwt.strategy.ts`
+  - `src/users/users.service.ts`
+  - `src/admin/users/users.service.ts`
+  - `src/admin/security/security.service.ts`
+- Spec mocks updated: `src/auth/auth.service.spec.ts`, `src/auth/auth.controller.spec.ts`, `src/users/users.service.spec.ts`, `src/users/users.controller.spec.ts`, `src/admin/auth/admin-permissions.spec.ts`
+
+**Compatibility.**
+- Responses for active users are unchanged.
+- New 403 bodies carry `statusCode`, `code` and `message`.
+- **Behaviour change:** accounts that already have `is_restricted = true` are now blocked. Check before deploying with `SELECT count(*) FROM users WHERE is_restricted;` (read-only).
+
+### 19b. Admin learning-content API (Decision 2, approved)
+
+- **Canonical learner models:**
+  - `courses`, with `topics` and `enrollments` (both ON DELETE CASCADE from the course);
+  - `lessons` (`courseId`, no foreign key).
+- `courses` has **no publishing field**, so changes are live immediately.
+- **New `src/admin/content/`** (DTO, service, controller and module, registered in `AdminModule`). Routes are under `/api/v1/admin/content`; the permission is `content.manage` (Content Admin, Admin, Super Admin).
+
+| Route | Behaviour |
+|---|---|
+| `GET /courses?page&limit(≤100)&search` | Paginated, with `topicCount`, `lessonCount` and `enrollmentCount`. Search matches the title. |
+| `GET /courses/:id` | The course, topics sorted by `order`, lessons and counts; 404 for a non-UUID or a missing course |
+| `POST /courses`, `PATCH /courses/:id` | Allowlisted fields: `title`, `description`, `track`, `level`, `departmentId` (the department must exist). An empty update → 400. |
+| `DELETE /courses/:id` | **Only an empty course**; otherwise **409** with the counts, and nothing is deleted |
+| `POST /courses/:id/topics`, `PATCH`/`DELETE /topics/:id` | Delete → 409 if `topic_masteries` or `user_progress` reference the topic |
+| `POST /courses/:id/lessons`, `PATCH`/`DELETE /lessons/:id` | Create checks the course exists. Delete → 409 if `lesson_progress` exists. |
+
+- Reuses `CoursesService` and `LessonsService`. The separate `admin_courses` endpoints are unchanged and still unread by learners.
+- **Files:**
+  - New: `src/admin/content/admin-content.{controller,service,module}.ts`, `src/admin/content/dto/admin-content.dto.ts`, `src/admin/content/admin-content.spec.ts`
+  - Modified: `src/admin/admin.module.ts` (CRLF preserved), `src/admin/auth/admin-permissions.spec.ts` (121 guarded routes)
+- The frontend admin console uses these routes (frontend Batch 19).
+
+### 19c. User deletion review (Decision 3, review first): hard delete disabled
+
+**Verified foreign keys to `users`** (local database `information_schema`, read-only). All are **ON DELETE CASCADE**:
+- `coin_transactions.user_id`
+- `decks`
+- `enrollments`
+- `library_favorites`
+- `library_saved_courses`
+- `user_achievements`
+- `user_badges`
+- `xp_transactions`
+
+**About 25 tables store a user id with no foreign key** and would be **orphaned** by a hard delete:
+- `admin_activity_logs`, `admin_reports`, `admin_user_actions`, `security_events`, and the admin `coin_transactions` entity
+- `subscriptions`
+- `tutor_sessions`, `ai_companions`, `ai_conversations`
+- `user_performances`, `exam_preps`, `study_goals`, `study_plan_items`
+- `lesson_progress`, `topic_masteries`, `user_progress`
+- `notes`, `notification_settings`, `notifications`, `push_tokens`
+- `streak_history`, `user_streaks`, `study_sessions`
+- `youtube_resources`
+
+**Decision applied:** destroying some personal data while orphaning the rest is unsafe. **`DELETE /api/v1/admin/users/:id` now returns 501 for every role, Super Admin included.** Nothing is removed or logged (tested), and no deletion behaviour was broadened.
+
+**Proposal (needs the owner's decision; not implemented):**
+- **Option A, recommended:** admin "deactivate" through `AccountStatusService.softDelete`. It sets `deletedAt`, blocks sign-in and keeps all data. The data can be purged later under a reviewed retention policy.
+- **Option B:** a reviewed erasure job that deletes or anonymizes each of the about 33 tables explicitly in one transaction, with a dry-run count report first. It needs a retention decision per table: financial records (`subscriptions`, coin ledgers) and audit logs typically must be kept or anonymized, not deleted.
+- **Either way:** add real foreign keys only through a reviewed migration (not drafted here).
+
+**Files:**
+- `src/admin/users/users.service.ts` (`deleteUser` → `notImplementedAction`)
+- `src/admin/auth/admin-permissions.spec.ts`
+
+### 19d. 🚨 Finding (not changed; needs the owner's approval): learners can edit the catalog
+
+The following routes are guarded **only by `JwtAuthGuard`**, so any signed-in learner can create, edit or delete catalog content. A course delete CASCADE-deletes its topics and **all enrollments**.
+- `POST /api/v1/courses`, `PATCH`/`DELETE /api/v1/courses/:id`, `POST /api/v1/courses/:courseId/topics` and `PATCH`/`DELETE /api/v1/topics/:id` (`src/courses/courses.controller.ts`)
+- `POST /api/v1/courses/:courseId/lessons` and `PATCH`/`DELETE /api/v1/lessons/:id` (`src/lessons/lessons.controller.ts`)
+
+**Recommendation:** remove learner write access to these routes, or restrict it to admins, now that `/api/v1/admin/content` exists. Read, enroll, start and complete routes are unaffected. This changes a public contract: the frontend `coursesApi` and `lessonsApi` define these write methods, but no page calls them. So it waits for approval.
+
+### Verification
+
+| Command | Result |
+|---|---|
+| Full `npx vitest run` | ✅ **292 passed / 0 failed** (26 files; 232 before this batch) |
+| `npx tsc --noEmit -p tsconfig.build.json` | ✅ exit 0 (`tsconfig.build.tsbuildinfo` restored afterwards) |
+| `oxlint` on the changed files | No new warnings. The 2 remaining in `src/users/users.service.ts` (unused `passwordHash` destructure, unused `userId` parameter) predate this batch. |
+
+### Not verified
+
+- Production database columns: the status service detects them at startup and degrades safely.
+- Content routes against a real database.
+- Any live session flow.
+
+## Batch 20 (2026-10-12): Phase 1 security (content authorization, account-takeover fix, fallback secrets) and the first live HTTP verification
+
+**Status:** ✅ Unit and HTTP tests, type-check and lint. ✅ **Verified over real HTTP** against the running backend on a disposable local database (54 + 31 checks). Nothing migrated or deployed; no production system or data touched.
+
+### 20a. Platform content is admin-only (directive 3.1)
+
+**Before:** the learner routes for course, topic, lesson, institution, faculty and department create/update/delete required only a learner token. Any learner could edit or delete the catalog, and `DELETE /courses/:id` CASCADE-deleted topics and **all enrollments**.
+
+**Now:**
+- **Writes require an admin token with `content.manage`:** `POST /courses`, `PATCH`/`DELETE /courses/:id`, `POST /courses/:courseId/topics`, `PATCH`/`DELETE /topics/:id`, `POST /courses/:courseId/lessons`, `PATCH`/`DELETE /lessons/:id`, and `POST`/`PATCH`/`DELETE` on `/institutions`, `/faculties` and `/departments`.
+  - A learner token gets 401, because the admin strategy rejects it.
+  - An admin without the permission gets 403.
+  - New decorator: `src/admin/auth/admin-only.decorator.ts` (`@AdminOnly(permission)`).
+  - The class-level learner guard moved to the individual learner routes, because both guards would otherwise run.
+- **Learner routes are unchanged:** `GET` courses, search, topics, lessons and progress; `GET /users/me/courses`; `POST`/`DELETE /courses/:id/enroll`; `POST /lessons/:id/start` and `/complete`; `GET` institutions, faculties and departments.
+- **Safe deletes everywhere:** new `src/courses/catalog-integrity.service.ts` (global `CatalogIntegrityModule`), used by both the legacy routes and `/admin/content`. A delete is refused with **409** when:
+  - a course has topics, lessons or enrollments;
+  - a topic has mastery or progress rows;
+  - a lesson has progress rows;
+  - an institution has faculties;
+  - a faculty has departments;
+  - a department has linked courses.
+  `AdminContentService` now delegates to it, so there is one implementation.
+- **Field allowlists** (new `src/common/utils/pick-defined.ts`): course `title`, `description`, `track`, `level`, `departmentId`; topic `title`, `description`, `order`; lesson `title`, `content`, `orderIndex`. Lesson bodies are typed with the existing `CreateLessonDto` and `UpdateLessonDto` (they were `any`). Creating a lesson for a missing course returns 404.
+
+### 20b. Verification and reset codes were not bound to an account (account takeover)
+
+**Before:** `POST /auth/verify-email {token}` and `POST /auth/reset-password {token, …}` found the user with `WHERE verificationOtp = token` across **all** users, and nothing limited guesses per account. An attacker could request resets for many accounts and then guess 6-digit codes against all of them. The earlier review recommended the fix but deferred it because it changes the contract.
+
+**Now** (new `src/auth/one-time-code.ts`):
+- The request must include `email`. The code is compared **in constant time** against that account only.
+- After **5 wrong codes** the pending code is cleared, so a new one must be requested.
+- An unknown email and a wrong code give the same message, so accounts can't be enumerated.
+- **Limitation:** the counter is in memory (per instance, reset on restart). A durable counter needs a column, which is a migration and is not done.
+- **Compatibility switch:** `AUTH_CODE_REQUIRES_EMAIL=false` restores the old code-only lookup for clients not yet updated. Not recommended.
+- **Contract change:** `VerifyEmailDto` and `ResetPasswordDto` gain `email`. The web frontend sends it (frontend Batch 20).
+
+### 20c. Other Phase 1 security fixes
+
+| Finding | Fix |
+|---|---|
+| `POST /api/v1/xp/award`: any learner could grant any amount of XP to any user | `@AdminOnly(users.manage)`. Learner XP reads are unchanged. |
+| The learner JWT fell back to a hard-coded secret published in the repository (`auth.module.ts`, `jwt.strategy.ts`) | No fallback (`src/auth/learner-jwt.config.ts`). Missing `JWT_SECRET` means sign-in and sign-up answer 503, every learner token is rejected, and the app keeps running. |
+| The Super Admin was seeded with a hard-coded default password when env vars were missing | Seeding is skipped, with a warning, unless both `SUPER_ADMIN_EMAIL` and `SUPER_ADMIN_PASSWORD` are set |
+| A third-party past-questions API key was committed in `exam-prep.service.ts` | Removed; `ALOC_API_KEY` from env only, otherwise 503 for uncached past questions. **The owner must rotate the key**: it remains in the public git history. |
+
+### 20d. Findings documented, not changed
+
+- **B2, data-loss risk with `DB_SYNCHRONIZE`:**
+  - `src/auth/entities/user.entity.ts` declares `fullName varchar`, while `src/users/users.entity.ts` declares `varchar(150)`.
+  - With synchronize on, TypeORM **drops and re-adds `users.fullName` on every boot**. Observed on the disposable database: the second boot failed with `column "fullName" … contains null values`. On a table where the add succeeds, the names are lost.
+  - **`DB_SYNCHRONIZE` must stay off** on any database holding data. It is already opt-in (B1). Reconciling the entities is part of B2, which is analysis-only.
+- `POST /auth/refresh-token` returns a fixed fake token, so it is not a refresh mechanism.
+- `POST /auth/logout` is stateless.
+- `POST /payments/webhook` is a no-op without signature verification.
+- B4 and B6 ownership remain open; the migrations await approval.
+
+### Files
+
+- New:
+  - `src/admin/auth/admin-only.decorator.ts`
+  - `src/courses/catalog-integrity.service.ts`
+  - `src/common/utils/pick-defined.ts`
+  - `src/auth/one-time-code.ts`
+  - `src/auth/learner-jwt.config.ts`
+  - Live harness: `test/live/` (`e2e-db.mjs`, `smtp_sink.py`, `start-backend.mjs`, `backend-workflows.mjs`, `frontend-clients.mjs`, `README.md`)
+  - Tests: `src/courses/catalog-write-authorization.spec.ts` (116 tests), `src/auth/one-time-code.spec.ts` (8), `src/common/security/fallback-secrets.spec.ts` (9)
+- Modified:
+  - `src/courses/courses.controller.ts`, `src/lessons/lessons.controller.ts`, `src/academic/academic.controller.ts` (CRLF preserved; active code only)
+  - `src/lessons/lessons.module.ts` (imports `CoursesModule`), `src/app.module.ts` (`CatalogIntegrityModule`)
+  - `src/admin/content/admin-content.service.ts`
+  - `src/auth/auth.service.ts`, `src/auth/auth.controller.ts`, `src/auth/auth.module.ts`, `src/auth/strategies/jwt.strategy.ts`
+  - `src/auth/dto/verify-email.dto.ts`, `src/auth/dto/password.dto.ts`
+  - `src/xp/xp.controller.ts`, `src/admin/auth/admin-auth.service.ts`, `src/exam-prep/exam-prep.service.ts`
+  - Specs updated for the new contracts: `src/admin/content/admin-content.spec.ts`, `src/auth/reset-password.spec.ts`, `src/auth/account-status-enforcement.spec.ts` (gives the sign-in tests a `JWT_SECRET`)
+  - `docs/CONFIGURATION_CHECKLIST.md` (`JWT_SECRET` no longer has a fallback, `AUTH_CODE_REQUIRES_EMAIL`, `SUPER_ADMIN_*`, ALOC rotation, deploy steps 7–10)
+
+### Verification
+
+| Command | Result |
+|---|---|
+| Full `npx vitest run` | ✅ **425 passed / 0 failed** (29 files; 292 before this batch) |
+| `npx tsc --noEmit -p tsconfig.build.json` | ✅ exit 0 (tsbuildinfo restored) |
+| `oxlint` on the changed files, compared with their `HEAD` versions | ✅ No new warnings (changed controllers and services: 0 now vs 1 at `HEAD`). The 7 warnings remaining in `src/auth` all predate this batch: 6 in `auth.service.ts` (identical at `HEAD`) and 1 in `login.dto.ts`. |
+| **Live HTTP**, `test/live/backend-workflows.mjs` | ✅ **54/54.** See the frontend `docs/FRONTEND_BACKEND_INTEGRATION_AUDIT.md` → Evidence. |
+| **Live HTTP with the real frontend clients**, `test/live/frontend-clients.mjs` | ✅ **31/31** |
+
+**Live environment** (reproducible; see `test/live/README.md`, new in this batch):
+- `dist/` compiled with `nest build` (no `prisma contract emit`).
+- The backend ran on `127.0.0.1:5055` with process-environment overrides only (`.env` unchanged): `DATABASE_NAME=gleamlearn_e2e` (a new disposable database on the local server, recreated per run because of the B2 sync issue), `DB_SYNCHRONIZE=true` for that database only, SMTP pointed at a local sink with dummy credentials, and `AI_SERVICE_URL` pointed at a local address.
+- The launcher refuses non-local database hosts.
+- No values were printed.
+
+## Batch 21 (2026-10-12): Phase 2, learner authentication support, plus security fixes found while wiring it
+
+**Status:** ✅ Unit tests, type-check and lint. ✅ **Live HTTP:** `test/live/learner-session.mjs` 29/29 (new), with regressions re-run: `backend-workflows.mjs` 54/54 and `frontend-clients.mjs` 31/31. Disposable local database only; nothing migrated or deployed.
+
+### 21a. 🚨 `GET /users/me` returned the pending verification / reset code
+
+- **Found live:** the users service loads the auth `User` entity, and `getProfile()` removed only `passwordHash`. So `GET /users/me`, and every profile-update response, returned **`verificationOtp`**, `otpExpiresAt` and `refreshToken`.
+- **Impact:** anyone holding a learner token could call `forgot-password`, read the reset code from `/users/me` and set a new password. That is a permanent takeover from a temporary token.
+- **Fix:** `getProfile()` strips all four fields. Verified live: none are present.
+
+### 21b. Ownership: request bodies could retarget or reassign records (mass assignment)
+
+- Several services copied bodies straight into entities (`Object.assign(entity, dto)` or `create({ userId, ...dto })`). The ValidationPipe runs with `whitelist: false`, so:
+  - `id` in an update body redirected the save to **another user's row** (verified live before the fix: a learner could overwrite another learner's note);
+  - `userId` in a create body could plant records in another account.
+- **Fix:** new `src/common/utils/strip-protected.ts` (`stripProtectedFields`: `id`, `userId`, `ownerId`, `createdBy`, `createdAt`, `updatedAt`, `deletedAt`), applied in:
+  - notes (create and update)
+  - flashcard decks (create and update) and flashcards (update)
+  - study goals (create)
+  - planner items (update)
+  - notification settings (create and update)
+  - the AI companion (create and upsert)
+
+  Where `userId` must win, it is now placed after the body.
+- **Exam prep (`/exam-prep`) had no ownership at all:**
+  - `GET /exam-prep` returned **every user's plans**.
+  - `GET`, `PATCH` and `DELETE /exam-prep/:id` worked on anyone's plan.
+  - `POST` never set the owner, and its DTO (`title`, `examType`, `subjects`, `targetDate`, `notes`) didn't match the table (`userId`, `examinationId`, `targetSubject`, `targetExamDate`, `studyPlan`), so **every create failed** on the NOT NULL `userId`.
+  - **Fix:** owner from the token; list, get, update and delete scoped to the owner (404 otherwise); the DTO mapped onto the existing columns with no schema change (`examinationId` ← `examType`, `targetSubject` ← joined `subjects`, `targetExamDate` ← `targetDate`, and `title`/`examType`/`subjects`/`notes` kept in `studyPlan`).
+  - **Existing rows created without a `userId` (if any) become invisible**, not deleted. Before relying on exam prep, check with the read-only `SELECT count(*) FROM exam_preps WHERE "userId" IS NULL;`.
+
+### 21c. Contract additions and fixes for the Phase 2 screens
+
+| Change | Detail |
+|---|---|
+| `GET /auth/me` adds `accountStatus` | `'active'` or `'frozen'`. Additive; it lets the client show the frozen-account page. Restricted and deleted accounts never reach this handler. |
+| `DELETE /users/me` requires `{ password }` | The account-deletion page asked for the password, but the backend never checked it, so a left-open or stolen session could delete the account. A wrong password returns **400** "Incorrect password", not 401, so it isn't mistaken for an expired session. The delete is still a soft delete: data is retained. |
+| `PATCH /users/me/academic-profile { levelOrClass }` | Returned **500**: the entity this service uses has no `levelOrClass` column (B2). Now stored in the existing `level` column. |
+| `PATCH /users/me/preferences { preferredLearningPace }` | Returned **500** for the same reason. Now answers 200 with `notStored: ['preferredLearningPace']`; the other fields are saved. Storing it needs B2 reconciliation or a migration. |
+
+**Still not real (documented, unchanged):** `PATCH /users/me/notification-preferences` and `/privacy-settings` echo the body without saving. `POST /users/me/profile-picture` stores nothing. `POST /auth/refresh-token` returns a fake token.
+
+### Files
+
+- New:
+  - `src/common/utils/strip-protected.ts`
+  - `src/users/profile-security.spec.ts` (8 tests)
+  - `src/common/security/ownership.spec.ts` (7)
+  - `test/live/learner-session.mjs`
+- Modified:
+  - `src/auth/auth.service.ts` (`getMe` adds `accountStatus`)
+  - `src/users/users.service.ts`, `src/users/users.controller.ts`
+  - `src/notes/notes.service.ts`, `src/flashcards/flashcards.service.ts`, `src/goals/goals.service.ts`, `src/planner/planner.service.ts`
+  - `src/notifications/notifications.service.ts`, `src/personal-ai-companion/personal-ai-companion.service.ts`
+  - `src/exam-prep/exam-prep.service.ts`, `src/exam-prep/exam-prep.controller.ts`
+  - `src/auth/account-status-enforcement.spec.ts` (+2: `/auth/me` `accountStatus`)
+  - `test/live/README.md`
+
+### Verification
+
+| Command | Result |
+|---|---|
+| Full `npx vitest run` | ✅ **442 passed / 0 failed** (31 files; 425 before) |
+| `npx tsc --noEmit -p tsconfig.build.json` | ✅ exit 0 (tsbuildinfo restored) |
+| `oxlint` on the 11 changed source files, compared with `HEAD` | ✅ 8 warnings at `HEAD` vs 7 now; none new. The remaining warnings predate this batch: 6 in `auth.service.ts`, plus the unused `userId` parameter in `users.service.ts`. |
+| **Live** `test/live/learner-session.mjs` (the real frontend `learner-auth.ts`, `onboarding-profile.ts` and `api.ts`) | ✅ **29/29.** Covers: sign-up → verify → sign-in (wrong password gives a generic message) → `/auth/me` with `accountStatus`; onboarding saves (`level`, study time, `notStored`, companion with an injected `userId` ignored); `/users/me` without secrets; exam-prep create 201, cross-user list, get, update and delete 404 with the owner's data intact; a note-`id` hijack blocked; freeze → `/auth/me` frozen, other routes 403 `ACCOUNT_FROZEN`, sign-in allowed → unfreeze; delete with a wrong password 400, then with the right one, after which sign-in is 401; sign-out clears the token. |
+| **Live regressions** | ✅ `backend-workflows.mjs` 54/54, `frontend-clients.mjs` 31/31 |

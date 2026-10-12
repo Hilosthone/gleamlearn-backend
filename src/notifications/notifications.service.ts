@@ -89,6 +89,7 @@ import { Notification } from './entities/notification.entity.js';
 import { NotificationSettings } from './entities/notification-settings.entity.js';
 import { PushToken } from './entities/push-token.entity.js';
 import { UpdateNotificationSettingsDto } from './dto/notification.dto.js';
+import { stripProtectedFields } from '../common/utils/strip-protected.js';
 
 @Injectable()
 export class NotificationsService {
@@ -227,9 +228,9 @@ export class NotificationsService {
   async updateSettings(userId: string, dto: UpdateNotificationSettingsDto) {
     let settings = await this.settingsRepo.findOne({ where: { userId } });
     if (!settings) {
-      settings = this.settingsRepo.create({ userId, ...dto });
+      settings = this.settingsRepo.create({ ...stripProtectedFields(dto), userId });
     } else {
-      Object.assign(settings, dto);
+      Object.assign(settings, stripProtectedFields(dto));
     }
     await this.settingsRepo.save(settings);
     return { status: 'success', message: 'Notification settings updated successfully', data: settings };

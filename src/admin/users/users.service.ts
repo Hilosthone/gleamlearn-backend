@@ -140,6 +140,10 @@ import { AdminUserAction } from './entities/admin-user-action.entity.js';
 import { AdminUsersQueryDto } from './dto/admin-users-query.dto.js';
 import { AdminResetPasswordDto } from './dto/admin-reset-password.dto.js';
 import * as bcrypt from 'bcrypt';
+import { notImplementedAction } from '../common/not-implemented.js';
+import { AccountStatusService } from '../../auth/account-status.service.js';
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Fields that must never leave the backend, even to administrators:
@@ -161,6 +165,7 @@ export class AdminUsersService {
     private readonly userRepo: Repository<User>,
     @InjectRepository(AdminUserAction)
     private readonly actionRepo: Repository<AdminUserAction>,
+    private readonly accountStatus: AccountStatusService,
   ) {}
 
   async findAll(query: AdminUsersQueryDto) {
@@ -220,33 +225,40 @@ export class AdminUsersService {
 
   async suspendUser(id: string) {
     const user = await this.ensureUserExists(id);
+    // Suspension uses the enforced restriction flag: sign-in is refused and existing tokens stop working
+    await this.accountStatus.setRestricted(user.id, true, 'Suspended by an administrator');
     await this.logAction(id, 'SUSPEND');
-    return { status: 'success', message: `User ${user.email} has been suspended.` };
+    return { status: 'success', message: `User ${user.email} has been suspended.`, data: { userId: id, isRestricted: true } };
   }
 
   async unsuspendUser(id: string) {
     const user = await this.ensureUserExists(id);
+    // Lifts the restriction flag (this also lifts a restriction applied via /admin/users/:id/restrict)
+    await this.accountStatus.setRestricted(user.id, false, null);
     await this.logAction(id, 'UNSUSPEND');
-    return { status: 'success', message: `User ${user.email} has been unsuspended.` };
+    return { status: 'success', message: `User ${user.email} has been unsuspended.`, data: { userId: id, isRestricted: false } };
   }
 
-  async freezeUser(id: string) {
-    const user = await this.ensureUserExists(id);
-    await this.logAction(id, 'FREEZE');
-    return { status: 'success', message: `User ${user.email} account has been frozen.` };
+  async freezeUser(_id: string): Promise<never> {
+    // Freezing is a learner-controlled pause (POST /users/me/freeze). To block an account, suspend or restrict it.
+    throw notImplementedAction('Freezing a user', 'freezing is controlled by the learner; suspend or restrict the account to block it');
   }
 
-  async unfreezeUser(id: string) {
-    const user = await this.ensureUserExists(id);
-    await this.logAction(id, 'UNFREEZE');
-    return { status: 'success', message: `User ${user.email} account has been unfrozen.` };
+  async unfreezeUser(_id: string): Promise<never> {
+    // Freezing is a learner-controlled pause (POST /users/me/freeze). To block an account, suspend or restrict it.
+    throw notImplementedAction('Unfreezing a user', 'freezing is controlled by the learner; suspend or restrict the account to block it');
   }
 
-  async deleteUser(id: string) {
-    const user = await this.ensureUserExists(id);
-    await this.logAction(id, 'DELETE');
-    await this.userRepo.remove(user);
-    return { status: 'success', message: `User account deleted successfully.` };
+  async deleteUser(_id: string): Promise<never> {
+    // DISABLED (Decision 3 review, 2026-10-12). A hard delete of the users row CASCADE-deletes 8 tables
+    // (coin_transactions, decks, enrollments, library_favorites, library_saved_courses, user_achievements,
+    // user_badges, xp_transactions) and ORPHANS ~25 tables that store userId without a foreign key (notes,
+    // AI conversations and tutor sessions, notifications, push tokens, progress, streaks, subscriptions, ...).
+    // That mix of destroyed and orphaned personal data is unsafe; see backend changelog for the proposal.
+    throw notImplementedAction(
+      'Permanent user deletion',
+      'it is disabled until a reviewed data-retention plan exists (it would delete some records and orphan others)',
+    );
   }
 
   async resetPassword(id: string, dto: AdminResetPasswordDto) {
@@ -259,17 +271,23 @@ export class AdminUsersService {
 
   async verifyUser(id: string) {
     const user = await this.ensureUserExists(id);
+    user.isEmailVerified = true;
+    await this.userRepo.save(user);
     await this.logAction(id, 'VERIFY');
-    return { status: 'success', message: `User ${user.email} has been manually verified.` };
+    return { status: 'success', message: `User ${user.email} has been manually verified.`, data: { userId: id, isEmailVerified: true } };
   }
 
   async unverifyUser(id: string) {
     const user = await this.ensureUserExists(id);
+    user.isEmailVerified = false;
+    await this.userRepo.save(user);
     await this.logAction(id, 'UNVERIFY');
-    return { status: 'success', message: `User ${user.email} verification has been revoked.` };
+    return { status: 'success', message: `User ${user.email} verification has been revoked.`, data: { userId: id, isEmailVerified: false } };
   }
 
   private async ensureUserExists(id: string): Promise<User> {
+    // Malformed ids are reported like missing users (and never reach the uuid column query)
+    if (typeof id !== 'string' || !UUID_PATTERN.test(id)) throw new NotFoundException('User not found');
     const user = await this.userRepo.findOne({ where: { id } });
     if (!user) throw new NotFoundException('User not found');
     return user;

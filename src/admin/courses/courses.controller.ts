@@ -6,6 +6,7 @@ import { CreateAdminCourseDto } from './dto/create-admin-course.dto.js';
 import { UpdateAdminCourseDto } from './dto/update-admin-course.dto.js';
 import { AdminCoursesQueryDto } from './dto/admin-courses-query.dto.js';
 import { AdminJwtAuthGuard } from '../auth/guards/admin-jwt.guard.js';
+import { AdminPermission, RequireAdminPermission } from '../auth/admin-permissions.js';
 
 @ApiTags('Admin Course Management')
 @ApiBearerAuth()
@@ -14,6 +15,7 @@ import { AdminJwtAuthGuard } from '../auth/guards/admin-jwt.guard.js';
 export class CoursesController {
   constructor(private readonly coursesService: CoursesService) {}
 
+  @RequireAdminPermission(AdminPermission.CONTENT_MANAGE)
   @Get()
   @ApiOperation({ summary: 'List all courses with pagination and search' })
   @ApiResponse({ status: 200, description: 'Courses retrieved successfully.' })
@@ -21,6 +23,7 @@ export class CoursesController {
     return this.coursesService.findAll(query);
   }
 
+  @RequireAdminPermission(AdminPermission.CONTENT_MANAGE)
   @Get(':id')
   @ApiOperation({ summary: 'Get a specific course by ID' })
   @ApiResponse({ status: 200, description: 'Course retrieved successfully.' })
@@ -28,6 +31,7 @@ export class CoursesController {
     return this.coursesService.findOne(id);
   }
 
+  @RequireAdminPermission(AdminPermission.CONTENT_MANAGE)
   @Post()
   @ApiOperation({ summary: 'Create a new course' })
   @ApiResponse({ status: 201, description: 'Course created successfully.' })
@@ -35,6 +39,7 @@ export class CoursesController {
     return this.coursesService.create(dto);
   }
 
+  @RequireAdminPermission(AdminPermission.CONTENT_MANAGE)
   @Patch(':id')
   @ApiOperation({ summary: 'Update an existing course' })
   @ApiResponse({ status: 200, description: 'Course updated successfully.' })
@@ -42,6 +47,7 @@ export class CoursesController {
     return this.coursesService.update(id, dto);
   }
 
+  @RequireAdminPermission(AdminPermission.CONTENT_MANAGE)
   @Delete(':id')
   @ApiOperation({ summary: 'Permanently delete a course' })
   @ApiResponse({ status: 200, description: 'Course deleted successfully.' })
@@ -49,6 +55,7 @@ export class CoursesController {
     return this.coursesService.remove(id);
   }
 
+  @RequireAdminPermission(AdminPermission.CONTENT_MANAGE)
   @Patch(':id/publish')
   @ApiOperation({ summary: 'Publish a course' })
   @ApiResponse({ status: 200, description: 'Course published successfully.' })
@@ -56,6 +63,7 @@ export class CoursesController {
     return this.coursesService.publish(id);
   }
 
+  @RequireAdminPermission(AdminPermission.CONTENT_MANAGE)
   @Patch(':id/unpublish')
   @ApiOperation({ summary: 'Unpublish a course' })
   @ApiResponse({ status: 200, description: 'Course unpublished successfully.' })

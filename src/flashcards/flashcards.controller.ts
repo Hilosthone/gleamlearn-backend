@@ -147,7 +147,9 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
 @ApiTags('Flashcards')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
-@Controller('flashcards')
+// Mounted on both paths: '/api/v1/flashcards' (what the frontend calls; consistent with every other
+// controller) and the original '/flashcards' (kept for existing clients; deprecated). Same handlers and guard.
+@Controller(['api/v1/flashcards', 'flashcards'])
 export class FlashcardsController {
   constructor(private readonly flashcardsService: FlashcardsService) {}
 

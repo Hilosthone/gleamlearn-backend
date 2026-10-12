@@ -130,10 +130,12 @@
 
 
 // src/users/users.service.ts
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import * as bcrypt from 'bcrypt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../auth/entities/user.entity.js';
+import { AccountStatusService } from '../auth/account-status.service.js';
 import {
   ACADEMIC_PROFILE_FIELDS,
   PREFERENCE_FIELDS,
@@ -142,11 +144,15 @@ import {
 } from '../common/utils/profile-update.util.js';
 import { UpdateUserDto, UpdateAcademicProfileDto, UpdatePreferencesDto } from './dto/update-user.dto.js';
 
+/** Preference fields accepted by the DTO but with no column on the entity this service uses (B2). */
+const UNSTORED_PREFERENCE_FIELDS = ['preferredLearningPace'] as const;
+
 @Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    private readonly accountStatus: AccountStatusService,
   ) {}
 
   // ==========================================
@@ -159,7 +165,9 @@ export class UsersService {
       throw new NotFoundException('User profile not found');
     }
     // Exclude passwordHash and refreshToken before returning
-    const { passwordHash, ...result } = user;
+    // Never return credentials or one-time codes: a pending reset code here would let anyone holding the
+    // access token reset the password (verificationOtp also serves as the password-reset code).
+    const { passwordHash: _hash, verificationOtp: _otp, otpExpiresAt: _otpExpiry, refreshToken: _refresh, ...result } = user;
     return result;
   }
 
@@ -175,28 +183,38 @@ export class UsersService {
     return this.getProfile(userId);
   }
 
-  async softDeleteAccount(userId: string) {
-    const result = await this.userRepository.update(userId, { 
-      deletedAt: new Date(), 
-      isFrozen: true 
-    } as any);
-    if (result.affected === 0) {
+  // Account status columns (isFrozen, deletedAt) are not declared on the auth User entity (B2), so they are
+  // written through AccountStatusService, which only touches columns that exist.
+  async softDeleteAccount(userId: string, password?: unknown) {
+    // Re-confirm with the password: a stolen or left-open session must not be enough to delete the account.
+    // A wrong password is 400 (not 401) so the client does not mistake it for an expired session.
+    if (typeof password !== 'string' || !password) {
+      throw new BadRequestException('Enter your password to delete your account');
+    }
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+    if (!(await bcrypt.compare(password, user.passwordHash))) {
+      throw new BadRequestException('Incorrect password');
+    }
+    const affected = await this.accountStatus.softDelete(userId);
+    if (affected === 0) {
       throw new NotFoundException('User not found');
     }
     return { message: 'Account successfully soft deleted and retained in backend' };
   }
 
   async freezeAccount(userId: string) {
-    const result = await this.userRepository.update(userId, { isFrozen: true } as any);
-    if (result.affected === 0) {
+    const affected = await this.accountStatus.setFrozen(userId, true);
+    if (affected === 0) {
       throw new NotFoundException('User not found');
     }
     return { message: 'Account successfully frozen' };
   }
 
   async unfreezeAccount(userId: string) {
-    const result = await this.userRepository.update(userId, { isFrozen: false, deletedAt: null as any } as any);
-    if (result.affected === 0) {
+    // Unfreezing never restores a deleted account (previously it also cleared deletedAt)
+    const affected = await this.accountStatus.setFrozen(userId, false);
+    if (affected === 0) {
       throw new NotFoundException('User not found');
     }
     return { message: 'Account successfully unfrozen' };
@@ -215,6 +233,12 @@ export class UsersService {
 
   async updateAcademicProfile(userId: string, academicDto: UpdateAcademicProfileDto) {
     const update = pickAllowed(academicDto, ACADEMIC_PROFILE_FIELDS);
+    // B2: this service uses the auth User entity, which has no levelOrClass column (500 before). The value is
+    // stored in the existing `level` column instead; no schema change.
+    if ('levelOrClass' in update) {
+      update.level = update.levelOrClass;
+      delete update.levelOrClass;
+    }
     if (Object.keys(update).length > 0) {
       await this.userRepository.update(userId, update as any);
     }
@@ -223,10 +247,18 @@ export class UsersService {
 
   async updatePreferences(userId: string, prefsDto: UpdatePreferencesDto) {
     const update = pickAllowed(prefsDto, PREFERENCE_FIELDS);
+    // B2: the auth User entity has no preferredLearningPace column (500 before). It is reported as not stored
+    // instead of failing; storing it needs the reviewed B2 reconciliation or a migration.
+    const notStored = UNSTORED_PREFERENCE_FIELDS.filter((key) => key in update);
+    for (const key of notStored) delete update[key];
     if (Object.keys(update).length > 0) {
       await this.userRepository.update(userId, update as any);
     }
-    return { message: 'Learning preferences updated successfully', data: await this.getProfile(userId) };
+    return {
+      message: notStored.length ? 'Learning preferences partly updated' : 'Learning preferences updated successfully',
+      data: await this.getProfile(userId),
+      ...(notStored.length ? { notStored } : {}),
+    };
   }
 
   async updateNotificationPreferences(userId: string, notifDto: Record<string, any>) {

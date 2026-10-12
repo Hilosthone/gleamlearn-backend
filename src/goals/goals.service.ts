@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { StudyGoal } from './entities/study-goal.entity.js';
 import { CreateStudyGoalDto, UpdateStudyGoalDto } from './dto/study-goal.dto.js';
+import { stripProtectedFields } from '../common/utils/strip-protected.js';
 
 @Injectable()
 export class GoalsService {
@@ -33,9 +34,10 @@ export class GoalsService {
   }
 
   async create(userId: string, dto: CreateStudyGoalDto) {
+    // userId last and protected fields dropped: the body cannot pick the owner or the row id
     const goal = this.goalsRepo.create({
+      ...stripProtectedFields(dto),
       userId,
-      ...dto,
     });
     const saved = await this.goalsRepo.save(goal);
     return {

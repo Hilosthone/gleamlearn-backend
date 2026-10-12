@@ -5,6 +5,7 @@ import { ReportsService } from './reports.service.js';
 import { AdminReportsQueryDto } from './dto/admin-reports-query.dto.js';
 import { UpdateAdminReportDto } from './dto/update-admin-report.dto.js';
 import { AdminJwtAuthGuard } from '../auth/guards/admin-jwt.guard.js';
+import { AdminPermission, RequireAdminPermission } from '../auth/admin-permissions.js';
 
 @ApiTags('Admin Reports Management')
 @ApiBearerAuth()
@@ -13,6 +14,7 @@ import { AdminJwtAuthGuard } from '../auth/guards/admin-jwt.guard.js';
 export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
 
+  @RequireAdminPermission(AdminPermission.MODERATION_MANAGE)
   @Get()
   @ApiOperation({ summary: 'List all platform reports with pagination and filters' })
   @ApiResponse({ status: 200, description: 'Reports retrieved successfully.' })
@@ -20,6 +22,7 @@ export class ReportsController {
     return this.reportsService.findAll(query);
   }
 
+  @RequireAdminPermission(AdminPermission.MODERATION_MANAGE)
   @Get(':id')
   @ApiOperation({ summary: 'Get a specific report by ID' })
   @ApiResponse({ status: 200, description: 'Report retrieved successfully.' })
@@ -27,6 +30,7 @@ export class ReportsController {
     return this.reportsService.findOne(id);
   }
 
+  @RequireAdminPermission(AdminPermission.MODERATION_MANAGE)
   @Patch(':id')
   @ApiOperation({ summary: 'Update report details' })
   @ApiResponse({ status: 200, description: 'Report updated successfully.' })
@@ -34,6 +38,7 @@ export class ReportsController {
     return this.reportsService.update(id, dto);
   }
 
+  @RequireAdminPermission(AdminPermission.MODERATION_MANAGE)
   @Patch(':id/resolve')
   @ApiOperation({ summary: 'Mark a report as resolved' })
   @ApiResponse({ status: 200, description: 'Report resolved successfully.' })
@@ -41,6 +46,7 @@ export class ReportsController {
     return this.reportsService.resolve(id);
   }
 
+  @RequireAdminPermission(AdminPermission.MODERATION_MANAGE)
   @Patch(':id/reject')
   @ApiOperation({ summary: 'Reject a report' })
   @ApiResponse({ status: 200, description: 'Report rejected successfully.' })

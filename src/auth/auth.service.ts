@@ -292,7 +292,10 @@ import { NotificationsService } from '../notifications/notifications.service.js'
 import * as bcrypt from 'bcrypt';
 import { generateOtp } from '../common/security/otp.js';
 import { LEARNER_TOKEN_TYPE } from '../admin/auth/admin-jwt.config.js';
+import { AccountStatusService } from './account-status.service.js';
 import { buildBasicProfileUpdate } from '../common/utils/profile-update.util.js';
+import { CodeFailureTracker, codeRequiresEmail, codesMatch } from './one-time-code.js';
+import { requireLearnerJwtSecret } from './learner-jwt.config.js';
 
 @Injectable()
 export class AuthService {
@@ -302,7 +305,39 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly mailService: MailService,
     private readonly notificationsService: NotificationsService,
+    private readonly accountStatus: AccountStatusService,
   ) {}
+
+  private readonly codeFailures = new CodeFailureTracker();
+
+  /**
+   * Finds the account a verification / reset code belongs to. The request must name the account (`email`);
+   * the code is compared in constant time and cleared after too many wrong attempts (see one-time-code.ts).
+   * Every failure returns the same message, so it does not reveal whether the email exists.
+   */
+  private async findUserForCode(email: unknown, code: unknown, invalidMessage: string): Promise<User> {
+    if (typeof code !== 'string' || !code.trim()) throw new BadRequestException(invalidMessage);
+    if (typeof email !== 'string' || !email.trim()) {
+      if (codeRequiresEmail()) throw new BadRequestException('email is required');
+      // Legacy mode (AUTH_CODE_REQUIRES_EMAIL=false): lookup by code alone, as before
+      const legacy = await this.userRepository.findOne({ where: { verificationOtp: code.trim() } });
+      if (!legacy) throw new BadRequestException(invalidMessage);
+      return legacy;
+    }
+    const user = await this.userRepository.findOne({ where: { email: email.trim() } });
+    if (!user || !user.verificationOtp) throw new BadRequestException(invalidMessage);
+    if (!codesMatch(user.verificationOtp, code)) {
+      if (this.codeFailures.recordFailure(user.id)) {
+        user.verificationOtp = null;
+        user.otpExpiresAt = null;
+        await this.userRepository.save(user);
+        throw new BadRequestException('Too many incorrect codes. Please request a new code.');
+      }
+      throw new BadRequestException(invalidMessage);
+    }
+    this.codeFailures.reset(user.id);
+    return user;
+  }
 
   async signup(signupDto: Record<string, any>) {
     const { email, username, password, confirmPassword, ...onboardingData } = signupDto;
@@ -354,6 +389,7 @@ export class AuthService {
 
     // Generate login token
     const payload = { sub: savedUser.id, email: savedUser.email, username: savedUser.username, type: LEARNER_TOKEN_TYPE };
+    requireLearnerJwtSecret(); // 503 instead of signing with a missing secret
     const accessToken = this.jwtService.sign(payload);
 
     // Send verification email with 6-digit OTP (passing fullName and otpCode correctly)
@@ -396,6 +432,12 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
+    // Account status gate (no new session for deleted or restricted accounts). Frozen accounts may sign in
+    // so they can unfreeze themselves; every other protected route rejects them (see JwtStrategy).
+    const status = await this.accountStatus.getStatus(user.id);
+    AccountStatusService.assertAllowed(status, { allowFrozen: true, unauthorizedMessage: 'Invalid email or password' });
+    const accountStatus = AccountStatusService.stateOf(status);
+
     // Send login welcome/alert email asynchronously (fails gracefully if SMTP is down)
     try {
       await this.mailService.sendLoginWelcomeEmail(user.email, user.fullName);
@@ -404,6 +446,7 @@ export class AuthService {
     }
 
     const payload = { sub: user.id, email: user.email, username: user.username, type: LEARNER_TOKEN_TYPE };
+    requireLearnerJwtSecret(); // 503 instead of signing with a missing secret
     const accessToken = this.jwtService.sign(payload);
 
     const { passwordHash: _, verificationOtp: __, otpExpiresAt: ___, ...result } = user;
@@ -411,6 +454,7 @@ export class AuthService {
     return {
       message: 'Successfully logged in',
       accessToken,
+      accountStatus, // 'active' | 'frozen' (additive)
       data: result,
     };
   }
@@ -421,7 +465,9 @@ export class AuthService {
       throw new NotFoundException('User profile not found');
     }
     const { passwordHash: _, verificationOtp: __, otpExpiresAt: ___, ...result } = user;
-    return { data: result };
+    // accountStatus (additive): lets the client show the frozen-account screen; restricted/deleted never reach here
+    const accountStatus = AccountStatusService.stateOf(await this.accountStatus.getStatus(userId));
+    return { data: result, accountStatus };
   }
 
   async updateMe(userId: string, updateDto: Record<string, any>) {
@@ -484,13 +530,9 @@ export class AuthService {
     return { message: 'Token refreshed successfully', accessToken: 'new-mock-jwt-token' };
   }
 
-  async verifyEmail(token: string) {
-    // Look up user by the 6-digit OTP code sent in the body
-    const user = await this.userRepository.findOne({ where: { verificationOtp: token } });
-
-    if (!user) {
-      throw new BadRequestException('Invalid or expired verification code');
-    }
+  async verifyEmail(body: { email?: string; token?: string }) {
+    // The code must belong to the named account (constant-time compare, limited wrong attempts)
+    const user = await this.findUserForCode(body?.email, body?.token, 'Invalid or expired verification code');
 
     // Check if the OTP has expired
     if (user.otpExpiresAt && new Date() > new Date(user.otpExpiresAt)) {
@@ -566,10 +608,10 @@ export class AuthService {
       throw new BadRequestException('New passwords do not match');
     }
 
-    // Find user by the 6-digit OTP code stored in verificationOtp
-    const user = await this.userRepository.findOne({ where: { verificationOtp: token } });
+    // The code must belong to the named account (constant-time compare, limited wrong attempts)
+    const user = await this.findUserForCode(body.email, token, 'Invalid or expired password reset code');
 
-    if (!user || (user.otpExpiresAt && new Date() > new Date(user.otpExpiresAt))) {
+    if (user.otpExpiresAt && new Date() > new Date(user.otpExpiresAt)) {
       throw new BadRequestException('Invalid or expired password reset code');
     }
 

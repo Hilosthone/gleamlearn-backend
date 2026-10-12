@@ -113,7 +113,8 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
 @ApiTags('Flashcard Decks')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
-@Controller('flashcard-decks')
+// Mounted on both paths: '/api/v1/flashcard-decks' (frontend) and the original '/flashcard-decks' (deprecated).
+@Controller(['api/v1/flashcard-decks', 'flashcard-decks'])
 export class FlashcardDecksController {
   constructor(private readonly flashcardsService: FlashcardsService) {}
 

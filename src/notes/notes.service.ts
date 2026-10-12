@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { NoteEntity } from './entities/note.entity.js';
 import { CreateNoteDto } from './dto/create-note.dto.js';
+import { stripProtectedFields } from '../common/utils/strip-protected.js';
 
 @Injectable()
 export class NotesService {
@@ -22,13 +23,13 @@ export class NotesService {
   }
 
   async create(userId: string, dto: CreateNoteDto) {
-    const newNote = this.noteRepo.create({ ...dto, userId });
+    const newNote = this.noteRepo.create({ ...stripProtectedFields(dto), userId });
     return this.noteRepo.save(newNote);
   }
 
   async update(id: string, userId: string, dto: Partial<CreateNoteDto>) {
     const note = await this.findOne(id, userId);
-    Object.assign(note, dto);
+    Object.assign(note, stripProtectedFields(dto)); // `id` in the body must not retarget the save
     return this.noteRepo.save(note);
   }
 

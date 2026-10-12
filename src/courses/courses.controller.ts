@@ -241,15 +241,23 @@ import { CoursesService } from './courses.service.js';
 import { CreateCourseDto, UpdateCourseDto, CreateTopicDto, UpdateTopicDto } from './dto/course.dto.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
+import { AdminOnly } from '../admin/auth/admin-only.decorator.js';
+import { AdminPermission } from '../admin/auth/admin-permissions.js';
+import { CatalogIntegrityService } from './catalog-integrity.service.js';
+import { pickDefined } from '../common/utils/pick-defined.js';
 
 @ApiTags('Courses, Topics & Enrollments')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
 @Controller('api/v1')
 export class CoursesController {
-  constructor(private readonly coursesService: CoursesService) {}
+  // Catalog writes are admin-only (content.manage, admin token). Reads, enrollment and search stay learner routes.
+  constructor(
+    private readonly coursesService: CoursesService,
+    private readonly integrity: CatalogIntegrityService,
+  ) {}
 
   // Course Search (Put before :id route to prevent collision)
+  @UseGuards(JwtAuthGuard)
   @Get('courses/search')
   @ApiOperation({ summary: 'Search courses by query string, track, or level' })
   @ApiResponse({ status: 200, description: 'List of matching courses retrieved.' })
@@ -259,6 +267,7 @@ export class CoursesController {
   }
 
   // Enrolled courses for current user
+  @UseGuards(JwtAuthGuard)
   @Get('users/me/courses')
   @ApiOperation({ summary: 'Get current user enrolled courses' })
   @ApiResponse({ status: 200, description: 'List of enrolled courses retrieved.' })
@@ -268,6 +277,7 @@ export class CoursesController {
   }
 
   // Courses CRUD
+  @UseGuards(JwtAuthGuard)
   @Get('courses')
   @ApiOperation({ summary: 'Retrieve all available courses' })
   @ApiResponse({ status: 200, description: 'List of all courses retrieved.' })
@@ -277,14 +287,16 @@ export class CoursesController {
   }
 
   @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 10, ttl: 60000 } })
+  @AdminOnly(AdminPermission.CONTENT_MANAGE)
   @Post('courses')
   @ApiOperation({ summary: 'Create a new course' })
   @ApiResponse({ status: 201, description: 'Course created successfully.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
   createCourse(@Body() dto: CreateCourseDto) {
-    return this.coursesService.createCourse(dto);
+    return this.coursesService.createCourse(pickDefined(dto, ['title', 'description', 'track', 'level', 'departmentId']) as CreateCourseDto);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get('courses/:id')
   @ApiOperation({ summary: 'Get a specific course by ID' })
   @ApiResponse({ status: 200, description: 'Course found.' })
@@ -295,26 +307,31 @@ export class CoursesController {
   }
 
   @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 10, ttl: 60000 } })
+  @AdminOnly(AdminPermission.CONTENT_MANAGE)
   @Patch('courses/:id')
   @ApiOperation({ summary: 'Update an existing course' })
   @ApiResponse({ status: 200, description: 'Course updated successfully.' })
   @ApiResponse({ status: 404, description: 'Course not found.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
   updateCourse(@Param('id') id: string, @Body() dto: UpdateCourseDto) {
-    return this.coursesService.updateCourse(id, dto);
+    return this.coursesService.updateCourse(id, pickDefined(dto, ['title', 'description', 'track', 'level', 'departmentId']) as UpdateCourseDto);
   }
 
   @Throttle({ short: { limit: 1, ttl: 5000 }, long: { limit: 5, ttl: 60000 } })
+  @AdminOnly(AdminPermission.CONTENT_MANAGE)
   @Delete('courses/:id')
   @ApiOperation({ summary: 'Delete a course' })
   @ApiResponse({ status: 200, description: 'Course deleted successfully.' })
   @ApiResponse({ status: 404, description: 'Course not found.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  deleteCourse(@Param('id') id: string) {
+  async deleteCourse(@Param('id') id: string) {
+    await this.coursesService.findCourseById(id);
+    await this.integrity.assertCourseDeletable(id); // 409 instead of cascading topics/enrollments
     return this.coursesService.deleteCourse(id);
   }
 
   // Topics
+  @UseGuards(JwtAuthGuard)
   @Get('courses/:courseId/topics')
   @ApiOperation({ summary: 'Get all topics belonging to a specific course' })
   @ApiResponse({ status: 200, description: 'List of topics retrieved.' })
@@ -325,15 +342,17 @@ export class CoursesController {
   }
 
   @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 15, ttl: 60000 } })
+  @AdminOnly(AdminPermission.CONTENT_MANAGE)
   @Post('courses/:courseId/topics')
   @ApiOperation({ summary: 'Create a new topic within a course' })
   @ApiResponse({ status: 201, description: 'Topic created successfully.' })
   @ApiResponse({ status: 404, description: 'Course not found.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
   createTopic(@Param('courseId') courseId: string, @Body() dto: CreateTopicDto) {
-    return this.coursesService.createTopic(courseId, dto);
+    return this.coursesService.createTopic(courseId, pickDefined(dto, ['title', 'description', 'order']) as CreateTopicDto);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get('topics/:id')
   @ApiOperation({ summary: 'Get a specific topic by ID' })
   @ApiResponse({ status: 200, description: 'Topic found.' })
@@ -344,27 +363,32 @@ export class CoursesController {
   }
 
   @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 15, ttl: 60000 } })
+  @AdminOnly(AdminPermission.CONTENT_MANAGE)
   @Patch('topics/:id')
   @ApiOperation({ summary: 'Update an existing topic' })
   @ApiResponse({ status: 200, description: 'Topic updated successfully.' })
   @ApiResponse({ status: 404, description: 'Topic not found.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
   updateTopic(@Param('id') id: string, @Body() dto: UpdateTopicDto) {
-    return this.coursesService.updateTopic(id, dto);
+    return this.coursesService.updateTopic(id, pickDefined(dto, ['title', 'description', 'order']) as UpdateTopicDto);
   }
 
   @Throttle({ short: { limit: 1, ttl: 5000 }, long: { limit: 5, ttl: 60000 } })
+  @AdminOnly(AdminPermission.CONTENT_MANAGE)
   @Delete('topics/:id')
   @ApiOperation({ summary: 'Delete a topic' })
   @ApiResponse({ status: 200, description: 'Topic deleted successfully.' })
   @ApiResponse({ status: 404, description: 'Topic not found.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  deleteTopic(@Param('id') id: string) {
+  async deleteTopic(@Param('id') id: string) {
+    await this.coursesService.findTopicById(id);
+    await this.integrity.assertTopicDeletable(id); // 409 instead of orphaning learner progress
     return this.coursesService.deleteTopic(id);
   }
 
   // Enrollments
   @Throttle({ short: { limit: 1, ttl: 2000 }, long: { limit: 10, ttl: 60000 } })
+  @UseGuards(JwtAuthGuard)
   @Post('courses/:courseId/enroll')
   @ApiOperation({ summary: 'Enroll the authenticated user in a course' })
   @ApiResponse({ status: 201, description: 'Successfully enrolled in course.' })
@@ -375,6 +399,7 @@ export class CoursesController {
   }
 
   @Throttle({ short: { limit: 1, ttl: 2000 }, long: { limit: 10, ttl: 60000 } })
+  @UseGuards(JwtAuthGuard)
   @Delete('courses/:courseId/enroll')
   @ApiOperation({ summary: 'Unenroll the authenticated user from a course' })
   @ApiResponse({ status: 200, description: 'Successfully unenrolled from course.' })

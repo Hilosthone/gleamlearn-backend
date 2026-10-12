@@ -10,6 +10,7 @@ import {
 } from './dto/admin-auth.dto.js';
 import { AdminJwtAuthGuard } from '../auth/guards/admin-jwt.guard.js';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator.js';
+import { AdminPermission, RequireAdminPermission } from './admin-permissions.js';
 
 @ApiTags('Admin Authentication')
 @Controller('api/v1/admin/auth')
@@ -53,6 +54,7 @@ export class AdminAuthController {
 
   @ApiBearerAuth()
   @UseGuards(AdminJwtAuthGuard)
+  @RequireAdminPermission(AdminPermission.SELF)
   @Get('me')
   @ApiOperation({ summary: 'Get current authenticated admin profile and role' })
   @ApiResponse({ status: 200, description: 'Admin profile retrieved successfully.' })

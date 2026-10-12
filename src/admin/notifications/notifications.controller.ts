@@ -6,6 +6,7 @@ import { CreateNotificationDto } from './dto/create-notification.dto.js';
 import { BroadcastNotificationDto } from './dto/broadcast-notification.dto.js';
 import { NotificationQueryDto } from './dto/notification-query.dto.js';
 import { AdminJwtAuthGuard } from '../auth/guards/admin-jwt.guard.js';
+import { AdminPermission, RequireAdminPermission } from '../auth/admin-permissions.js';
 
 @ApiTags('Admin Notifications')
 @ApiBearerAuth()
@@ -14,6 +15,7 @@ import { AdminJwtAuthGuard } from '../auth/guards/admin-jwt.guard.js';
 export class NotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}
 
+  @RequireAdminPermission(AdminPermission.NOTIFICATIONS_SEND)
   @Post()
   @ApiOperation({ summary: 'Send a notification to a specific user' })
   @ApiResponse({ status: 201, description: 'Notification sent successfully.' })
@@ -21,6 +23,7 @@ export class NotificationsController {
     return this.notificationsService.sendNotification(dto, req.user.id);
   }
 
+  @RequireAdminPermission(AdminPermission.NOTIFICATIONS_SEND)
   @Post('broadcast')
   @ApiOperation({ summary: 'Broadcast a notification to specific audience segments (Everyone, Secondary, University, Premium, etc.)' })
   @ApiResponse({ status: 201, description: 'Broadcast sent successfully.' })
@@ -28,6 +31,7 @@ export class NotificationsController {
     return this.notificationsService.broadcastNotification(dto, req.user.id);
   }
 
+  @RequireAdminPermission(AdminPermission.NOTIFICATIONS_SEND)
   @Get()
   @ApiOperation({ summary: 'List all notifications sent by admins' })
   @ApiResponse({ status: 200, description: 'Notifications history retrieved successfully.' })
@@ -35,6 +39,7 @@ export class NotificationsController {
     return this.notificationsService.findAll(query);
   }
 
+  @RequireAdminPermission(AdminPermission.NOTIFICATIONS_SEND)
   @Delete(':id')
   @ApiOperation({ summary: 'Delete or revoke a sent notification log by ID' })
   @ApiResponse({ status: 200, description: 'Notification deleted successfully.' })

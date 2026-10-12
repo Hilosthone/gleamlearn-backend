@@ -100,7 +100,7 @@
 
 
 // src/exam-prep/exam-prep.service.ts
-import { Injectable, HttpException, HttpStatus, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, HttpException, HttpStatus, InternalServerErrorException, ServiceUnavailableException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
@@ -124,7 +124,8 @@ export class ExamPrepService {
     private examPrepRepo: Repository<ExamPrep>,
     private configService: ConfigService,
   ) {
-    this.alocApiKey = this.configService.get<string>('ALOC_API_KEY') || 'aloc_BE7smvfkCg9bqucipjhbwICH9FcyRMZRdtxrBmmr';
+    // No fallback key (a key was previously committed here and must be rotated by the owner)
+    this.alocApiKey = this.configService.get<string>('ALOC_API_KEY')?.trim() ?? '';
     this.alocBaseUrl = this.configService.get<string>('ALOC_BASE_URL') || 'https://dev.aloc.com.ng/api/v1';
   }
 
@@ -163,6 +164,9 @@ export class ExamPrepService {
     }
 
     // 2. Fetch from ALOC API if not cached locally
+    if (!this.alocApiKey) {
+      throw new ServiceUnavailableException('The past-questions provider is not configured (ALOC_API_KEY).');
+    }
     try {
       const response = await axios.get(`${this.alocBaseUrl}/questions`, {
         headers: {
@@ -240,40 +244,49 @@ export class ExamPrepService {
   }
 
 // --- Exam Preparation Plans ---
-  async createPrepPlan(dto: CreateExamPrepDto): Promise<ExamPrep> {
-    const prep = this.examPrepRepo.create({
-      title: dto.title,
-      examType: dto.examType,
-      subjects: dto.subjects,
-      targetDate: new Date(dto.targetDate),
-      notes: dto.notes,
-    } as any) as any;
-    
+  /**
+   * The DTO (title, examType, subjects, targetDate, notes) does not match the exam_preps columns
+   * (userId, examinationId, targetSubject, targetExamDate, studyPlan), so every create used to fail
+   * (userId / examinationId are NOT NULL). It is mapped onto the existing columns; no schema change.
+   */
+  private toColumns(dto: Partial<CreateExamPrepDto>, current?: ExamPrep): Partial<ExamPrep> {
+    const plan: Record<string, unknown> = { ...(current?.studyPlan as Record<string, unknown> | undefined) };
+    if (dto.title !== undefined) plan.title = dto.title;
+    if (dto.examType !== undefined) plan.examType = dto.examType;
+    if (dto.subjects !== undefined) plan.subjects = dto.subjects;
+    if (dto.notes !== undefined) plan.notes = dto.notes;
+    const out: Partial<ExamPrep> = { studyPlan: plan };
+    if (dto.examType !== undefined) out.examinationId = String(dto.examType);
+    if (dto.subjects !== undefined) out.targetSubject = (dto.subjects ?? []).join(', ');
+    if (dto.targetDate !== undefined) out.targetExamDate = new Date(dto.targetDate);
+    return out;
+  }
+
+  async createPrepPlan(userId: string, dto: CreateExamPrepDto): Promise<ExamPrep> {
+    const prep = this.examPrepRepo.create({ ...this.toColumns(dto), userId });
     return await this.examPrepRepo.save(prep);
   }
 
-  async findAllPrepPlans(): Promise<ExamPrep[]> {
-    return await this.examPrepRepo.find();
+  /** Only the caller's plans (this returned every user's plans before). */
+  async findAllPrepPlans(userId: string): Promise<ExamPrep[]> {
+    return await this.examPrepRepo.find({ where: { userId }, order: { createdAt: 'DESC' } });
   }
 
-  async findPrepPlanById(id: string): Promise<ExamPrep> {
-    const prep = await this.examPrepRepo.findOne({ where: { id } });
+  /** Owner-scoped: another user's plan is reported as not found. */
+  async findPrepPlanById(id: string, userId: string): Promise<ExamPrep> {
+    const prep = await this.examPrepRepo.findOne({ where: { id, userId } });
     if (!prep) throw new HttpException('Exam preparation plan not found', HttpStatus.NOT_FOUND);
     return prep;
   }
 
-  async updatePrepPlan(id: string, dto: Partial<CreateExamPrepDto>): Promise<ExamPrep> {
-    await this.findPrepPlanById(id);
-    const updatePayload: any = { ...dto };
-    if (dto.targetDate) {
-      updatePayload.targetDate = new Date(dto.targetDate);
-    }
-    await this.examPrepRepo.update(id, updatePayload);
-    return this.findPrepPlanById(id);
+  async updatePrepPlan(id: string, userId: string, dto: Partial<CreateExamPrepDto>): Promise<ExamPrep> {
+    const current = await this.findPrepPlanById(id, userId);
+    await this.examPrepRepo.update({ id, userId }, this.toColumns(dto, current) as any);
+    return this.findPrepPlanById(id, userId);
   }
 
-  async deletePrepPlan(id: string): Promise<{ status: string; message: string }> {
-    const prep = await this.findPrepPlanById(id);
+  async deletePrepPlan(id: string, userId: string): Promise<{ status: string; message: string }> {
+    const prep = await this.findPrepPlanById(id, userId);
     await this.examPrepRepo.remove(prep);
     return { status: 'success', message: 'Exam preparation plan deleted.' };
   }

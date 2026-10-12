@@ -144,6 +144,10 @@ import { User } from '../../auth/entities/user.entity.js';
 import { ActivityLog } from '../activity/entities/activity-log.entity.js';
 import { RestrictUserDto } from './dto/restrict-user.dto.js';
 import { SecurityQueryDto } from './dto/security-query.dto.js';
+import { notImplementedAction } from '../common/not-implemented.js';
+import { AccountStatusService } from '../../auth/account-status.service.js';
+
+const RESTRICT_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 @Injectable()
 export class SecurityService {
@@ -154,7 +158,15 @@ export class SecurityService {
     private readonly userRepo: Repository<User>,
     @InjectRepository(ActivityLog)
     private readonly auditRepo: Repository<ActivityLog>,
+    private readonly accountStatus: AccountStatusService,
   ) {}
+
+  private async findTarget(userId: string): Promise<User> {
+    if (typeof userId !== 'string' || !RESTRICT_UUID.test(userId)) throw new NotFoundException('User not found');
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+    return user;
+  }
 
   async getSecurityEvents(query: SecurityQueryDto) {
     const { page = 1, limit = 10, severity } = query;
@@ -200,80 +212,52 @@ export class SecurityService {
   }
 
   async restrictUser(userId: string, dto: RestrictUserDto, adminId: string) {
-    const user = await this.userRepo.findOne({ where: { id: userId } });
-    if (!user) throw new NotFoundException(`User with ID ${userId} not found`);
-
-    user.isRestricted = true;
-    user.restrictionReason = dto.reason;
-    user.refreshToken = null;
-    await this.userRepo.save(user);
-
-    // Audit Log
-    const audit = this.auditRepo.create({
-      adminId,
-      category: 'SECURITY',
-      action: 'RESTRICT_USER',
-      target: `User: ${user.email}`,
-      details: JSON.stringify({ reason: dto.reason }),
-      ipAddress: '127.0.0.1',
-    });
-    await this.auditRepo.save(audit);
-
+    const user = await this.findTarget(userId);
+    // Enforced: AccountStatusService blocks sign-in (403) and every authenticated request with an existing token
+    await this.accountStatus.setRestricted(user.id, true, dto.reason);
+    await this.auditRepo.save(
+      this.auditRepo.create({
+        adminId,
+        category: 'SECURITY',
+        action: 'RESTRICT_USER',
+        target: `User: ${user.id}`,
+        details: JSON.stringify({ reason: dto.reason }),
+        ipAddress: 'n/a',
+      }),
+    );
     return {
       status: 'success',
-      message: `User ${user.username} has been restricted successfully`,
+      message: `User ${user.username ?? user.email} has been restricted`,
       data: { userId: user.id, isRestricted: true, reason: dto.reason },
     };
   }
 
   async unrestrictUser(userId: string, adminId: string) {
-    const user = await this.userRepo.findOne({ where: { id: userId } });
-    if (!user) throw new NotFoundException(`User with ID ${userId} not found`);
-
-    user.isRestricted = false;
-    user.restrictionReason = null;
-    await this.userRepo.save(user);
-
-    // Audit Log
-    const audit = this.auditRepo.create({
-      adminId,
-      category: 'SECURITY',
-      action: 'UNRESTRICT_USER',
-      target: `User: ${user.email}`,
-      details: 'Restriction lifted by admin',
-      ipAddress: '127.0.0.1',
-    });
-    await this.auditRepo.save(audit);
-
+    const user = await this.findTarget(userId);
+    await this.accountStatus.setRestricted(user.id, false, null);
+    await this.auditRepo.save(
+      this.auditRepo.create({
+        adminId,
+        category: 'SECURITY',
+        action: 'UNRESTRICT_USER',
+        target: `User: ${user.id}`,
+        details: 'Restriction lifted by admin',
+        ipAddress: 'n/a',
+      }),
+    );
     return {
       status: 'success',
-      message: `User ${user.username} restriction has been lifted`,
+      message: `User ${user.username ?? user.email} restriction has been lifted`,
       data: { userId: user.id, isRestricted: false },
     };
   }
 
-  async forceLogoutUser(userId: string, adminId: string) {
-    const user = await this.userRepo.findOne({ where: { id: userId } });
-    if (!user) throw new NotFoundException(`User with ID ${userId} not found`);
-
-    user.refreshToken = null;
-    await this.userRepo.save(user);
-
-    // Audit Log
-    const audit = this.auditRepo.create({
-      adminId,
-      category: 'SECURITY',
-      action: 'FORCE_LOGOUT_USER',
-      target: `User: ${user.email}`,
-      details: 'All active sessions terminated by admin',
-      ipAddress: '127.0.0.1',
-    });
-    await this.auditRepo.save(audit);
-
-    return {
-      status: 'success',
-      message: `User ${user.username} has been force-logged out across all devices`,
-      data: { userId: user.id },
-    };
+  async forceLogoutUser(_userId: string, _adminId: string): Promise<never> {
+    // Restricting an account already blocks its existing tokens on every request. A plain "log out
+    // everywhere" for an unrestricted account needs token revocation, which does not exist yet.
+    throw notImplementedAction(
+      'Forcing a logout',
+      'access tokens cannot be revoked yet; restrict the account to block it immediately',
+    );
   }
 }

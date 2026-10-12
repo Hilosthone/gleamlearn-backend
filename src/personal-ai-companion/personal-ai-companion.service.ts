@@ -60,6 +60,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AiCompanion } from './entities/ai-companion.entity.js';
 import { UpsertAiCompanionDto } from './dto/ai-companion.dto.js';
+import { stripProtectedFields } from '../common/utils/strip-protected.js';
 
 @Injectable()
 export class PersonalAiCompanionService {
@@ -83,7 +84,8 @@ export class PersonalAiCompanionService {
     if (existing) {
       throw new HttpException('Companion profile already exists. Use PATCH to update.', HttpStatus.CONFLICT);
     }
-    const companion = this.companionRepo.create({ userId, ...dto });
+    // userId last and protected fields dropped: the body cannot create a companion for another account
+    const companion = this.companionRepo.create({ ...stripProtectedFields(dto), userId });
     await this.companionRepo.save(companion);
     return { status: 'success', message: 'Companion created successfully', data: companion };
   }
@@ -91,9 +93,9 @@ export class PersonalAiCompanionService {
   async updateCompanion(userId: string, dto: UpsertAiCompanionDto) {
     let companion = await this.companionRepo.findOne({ where: { userId } });
     if (!companion) {
-      companion = this.companionRepo.create({ userId, ...dto });
+      companion = this.companionRepo.create({ ...stripProtectedFields(dto), userId });
     } else {
-      Object.assign(companion, dto);
+      Object.assign(companion, stripProtectedFields(dto));
     }
     await this.companionRepo.save(companion);
     return { status: 'success', message: 'Companion updated successfully', data: companion };

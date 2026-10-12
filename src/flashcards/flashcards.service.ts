@@ -7,6 +7,7 @@ import { Flashcard } from './entities/flashcard.entity.js';
 import { CreateDeckDto, UpdateDeckDto } from './dto/deck.dto.js';
 import { CreateFlashcardDto, UpdateFlashcardDto, ReviewFlashcardDto } from './dto/flashcard.dto.js';
 import { calculateSM2 } from './utils/sm2.util.js';
+import { stripProtectedFields } from '../common/utils/strip-protected.js';
 
 @Injectable()
 export class FlashcardsService {
@@ -19,7 +20,7 @@ export class FlashcardsService {
 
   // --- DECKS ---
   async createDeck(userId: string, dto: CreateDeckDto) {
-    const deck = this.deckRepository.create({ ...dto, userId });
+    const deck = this.deckRepository.create({ ...stripProtectedFields(dto), userId });
     return await this.deckRepository.save(deck);
   }
 
@@ -47,7 +48,7 @@ export class FlashcardsService {
 
   async updateDeck(id: string, userId: string, dto: UpdateDeckDto) {
     const deck = await this.findOneDeck(id, userId);
-    Object.assign(deck, dto);
+    Object.assign(deck, stripProtectedFields(dto)); // `id` in the body must not retarget the save
     return await this.deckRepository.save(deck);
   }
 
@@ -97,7 +98,7 @@ export class FlashcardsService {
     if (dto.deckId && dto.deckId !== card.deckId) {
       await this.findOneDeck(dto.deckId, userId);
     }
-    Object.assign(card, dto);
+    Object.assign(card, stripProtectedFields(dto)); // `id` in the body must not retarget the save
     return await this.flashcardRepository.save(card);
   }
 

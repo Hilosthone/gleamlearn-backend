@@ -35,7 +35,7 @@ describe('admin user responses never contain secrets', () => {
     const service = new AdminUsersService(userRepo as any, {} as any);
 
     const list = await service.findAll({ page: 1, limit: 10 });
-    const one = await service.findOne('u1');
+    const one = await service.findOne('55555555-5555-4555-8555-555555555555');
     const serialized = JSON.stringify([list, one]);
     for (const secret of ['481516', 'refresh-secret', '$2b$10$hash']) expect(serialized).not.toContain(secret);
     expect(list.data.pagination).toEqual({ total: 1, page: 1, limit: 10, totalPages: 1 });

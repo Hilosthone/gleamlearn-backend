@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, MoreThanOrEqual, LessThanOrEqual, Between } from 'typeorm';
 import { StudyPlanItem } from './entities/study-plan-item.entity.js';
 import { GeneratePlannerDto, UpdatePlannerItemDto } from './dto/study-planner.dto.js';
+import { stripProtectedFields } from '../common/utils/strip-protected.js';
 
 @Injectable()
 export class PlannerService {
@@ -127,7 +128,7 @@ export class PlannerService {
       throw new NotFoundException(`Study plan item with ID ${id} not found.`);
     }
 
-    Object.assign(item, dto);
+    Object.assign(item, stripProtectedFields(dto)); // `id` in the body must not retarget the save
     const updated = await this.plannerRepo.save(item);
     return {
       status: 'success',

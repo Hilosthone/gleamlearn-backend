@@ -5,9 +5,11 @@ import { LessonEntity } from './entities/lesson.entity.js';
 import { LessonProgressEntity } from './entities/lesson-progress.entity.js';
 import { LessonsService } from './lessons.service.js';
 import { LessonsController } from './lessons.controller.js';
+import { CoursesModule } from '../courses/courses.module.js';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([LessonEntity, LessonProgressEntity])],
+  // CoursesModule: lesson creation checks that the course exists
+  imports: [TypeOrmModule.forFeature([LessonEntity, LessonProgressEntity]), CoursesModule],
   controllers: [LessonsController],
   providers: [LessonsService],
   exports: [LessonsService],

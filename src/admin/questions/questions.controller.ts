@@ -6,6 +6,7 @@ import { CreateAdminQuestionDto } from './dto/create-admin-question.dto.js';
 import { UpdateAdminQuestionDto } from './dto/update-admin-question.dto.js';
 import { AdminQuestionsQueryDto } from './dto/admin-questions-query.dto.js';
 import { AdminJwtAuthGuard } from '../auth/guards/admin-jwt.guard.js';
+import { AdminPermission, RequireAdminPermission } from '../auth/admin-permissions.js';
 
 @ApiTags('Admin Question Management')
 @ApiBearerAuth()
@@ -14,6 +15,7 @@ import { AdminJwtAuthGuard } from '../auth/guards/admin-jwt.guard.js';
 export class QuestionsController {
   constructor(private readonly questionsService: QuestionsService) {}
 
+  @RequireAdminPermission(AdminPermission.CONTENT_MANAGE)
   @Get()
   @ApiOperation({ summary: 'List all questions with filtering and pagination' })
   @ApiResponse({ status: 200, description: 'Questions retrieved successfully.' })
@@ -21,6 +23,7 @@ export class QuestionsController {
     return this.questionsService.findAll(query);
   }
 
+  @RequireAdminPermission(AdminPermission.CONTENT_MANAGE)
   @Get(':id')
   @ApiOperation({ summary: 'Get a specific question by ID' })
   @ApiResponse({ status: 200, description: 'Question retrieved successfully.' })
@@ -28,6 +31,7 @@ export class QuestionsController {
     return this.questionsService.findOne(id);
   }
 
+  @RequireAdminPermission(AdminPermission.CONTENT_MANAGE)
   @Post()
   @ApiOperation({ summary: 'Create a new question' })
   @ApiResponse({ status: 201, description: 'Question created successfully.' })
@@ -35,6 +39,7 @@ export class QuestionsController {
     return this.questionsService.create(dto);
   }
 
+  @RequireAdminPermission(AdminPermission.CONTENT_MANAGE)
   @Patch(':id')
   @ApiOperation({ summary: 'Update an existing question' })
   @ApiResponse({ status: 200, description: 'Question updated successfully.' })
@@ -42,6 +47,7 @@ export class QuestionsController {
     return this.questionsService.update(id, dto);
   }
 
+  @RequireAdminPermission(AdminPermission.CONTENT_MANAGE)
   @Delete(':id')
   @ApiOperation({ summary: 'Permanently delete a question' })
   @ApiResponse({ status: 200, description: 'Question deleted successfully.' })
@@ -49,6 +55,7 @@ export class QuestionsController {
     return this.questionsService.remove(id);
   }
 
+  @RequireAdminPermission(AdminPermission.CONTENT_MANAGE)
   @Patch(':id/approve')
   @ApiOperation({ summary: 'Approve a submitted question' })
   @ApiResponse({ status: 200, description: 'Question approved successfully.' })
@@ -56,6 +63,7 @@ export class QuestionsController {
     return this.questionsService.approve(id);
   }
 
+  @RequireAdminPermission(AdminPermission.CONTENT_MANAGE)
   @Patch(':id/reject')
   @ApiOperation({ summary: 'Reject a submitted question' })
   @ApiResponse({ status: 200, description: 'Question rejected successfully.' })

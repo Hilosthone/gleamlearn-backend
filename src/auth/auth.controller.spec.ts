@@ -7,6 +7,7 @@ import { AuthService } from './auth.service.js';
 import { User } from './entities/user.entity.js';
 import { MailService } from '../mail/mail.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
+import { AccountStatusService } from './account-status.service.js';
 
 describe('AuthController', () => {
   let controller: AuthController;
@@ -15,6 +16,7 @@ describe('AuthController', () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AuthController],
       providers: [
+        { provide: AccountStatusService, useValue: { getStatus: vi.fn(async () => ({ exists: true, restricted: false, restrictionReason: null, frozen: false, deleted: false, role: 'student' })), setRestricted: vi.fn(async () => 1), setFrozen: vi.fn(async () => 1), softDelete: vi.fn(async () => 1) } },
         AuthService,
         { provide: getRepositoryToken(User), useValue: { findOne: vi.fn(), create: vi.fn(), save: vi.fn() } },
         { provide: JwtService, useValue: { sign: vi.fn(), signAsync: vi.fn(), verify: vi.fn() } },

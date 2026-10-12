@@ -11,6 +11,7 @@ import { AuthModule } from './auth/auth.module.js';
 import { UsersModule } from './users/users.module.js';
 import { AcademicModule } from './academic/academic.module.js'; 
 import { CoursesModule } from './courses/courses.module.js'; 
+import { CatalogIntegrityModule } from './courses/catalog-integrity.service.js';
 import { LibraryModule } from './library/library.module.js';
 import { FilesModule } from './files/files.module.js';
 import { YoutubeModule } from './youtube/youtube.module.js';
@@ -103,6 +104,7 @@ import { AdminModule } from './admin/admin.module.js';
     AuthModule,
     UsersModule,
     AcademicModule,
+    CatalogIntegrityModule,
     CoursesModule, 
     LibraryModule,
     FilesModule,

@@ -4,6 +4,7 @@ import { SecurityService } from './security.service.js';
 import { RestrictUserDto } from './dto/restrict-user.dto.js';
 import { SecurityQueryDto } from './dto/security-query.dto.js';
 import { AdminJwtAuthGuard } from '../auth/guards/admin-jwt.guard.js';
+import { AdminPermission, RequireAdminPermission } from '../auth/admin-permissions.js';
 
 @ApiTags('Admin Security & Abuse Management')
 @ApiBearerAuth()
@@ -12,6 +13,7 @@ import { AdminJwtAuthGuard } from '../auth/guards/admin-jwt.guard.js';
 export class SecurityController {
   constructor(private readonly securityService: SecurityService) {}
 
+  @RequireAdminPermission(AdminPermission.SECURITY_VIEW)
   @Get('security/events')
   @ApiOperation({ summary: 'Retrieve security events, failed login alerts, and threat logs' })
   @ApiResponse({ status: 200, description: 'Security events retrieved successfully.' })
@@ -19,6 +21,7 @@ export class SecurityController {
     return this.securityService.getSecurityEvents(query);
   }
 
+  @RequireAdminPermission(AdminPermission.SECURITY_VIEW)
   @Get('security/suspicious-users')
   @ApiOperation({ summary: 'List flagged or restricted users with abuse history' })
   @ApiResponse({ status: 200, description: 'Suspicious users retrieved successfully.' })
@@ -26,6 +29,7 @@ export class SecurityController {
     return this.securityService.getSuspiciousUsers();
   }
 
+  @RequireAdminPermission(AdminPermission.USERS_MANAGE)
   @Post('users/:id/restrict')
   @ApiOperation({ summary: 'Restrict/suspend a user account due to policy violation or abuse' })
   @ApiResponse({ status: 200, description: 'User restricted successfully.' })
@@ -33,6 +37,7 @@ export class SecurityController {
     return this.securityService.restrictUser(id, dto, req.user.id);
   }
 
+  @RequireAdminPermission(AdminPermission.USERS_MANAGE)
   @Post('users/:id/unrestrict')
   @ApiOperation({ summary: 'Lift suspension and restore user account access' })
   @ApiResponse({ status: 200, description: 'User unrestricted successfully.' })
@@ -40,6 +45,7 @@ export class SecurityController {
     return this.securityService.unrestrictUser(id, req.user.id);
   }
 
+  @RequireAdminPermission(AdminPermission.USERS_MANAGE)
   @Post('users/:id/force-logout')
   @ApiOperation({ summary: 'Revoke user refresh tokens and force immediate logout across all devices' })
   @ApiResponse({ status: 200, description: 'User force-logged out successfully.' })

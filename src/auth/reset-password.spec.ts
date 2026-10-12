@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import * as bcrypt from 'bcrypt';
 import { AuthService } from './auth.service.js';
+import { CodeFailureTracker } from './one-time-code.js';
 import { ResetPasswordDto } from './dto/password.dto.js';
 import { createGlobalValidationPipe } from '../common/validation/global-validation.pipe.js';
 
@@ -12,6 +13,7 @@ function build(user: any) {
   const service = Object.create(AuthService.prototype);
   service.userRepository = repo;
   service.mailService = mailService;
+  service.codeFailures = new CodeFailureTracker();
   return { service, repo, mailService };
 }
 
@@ -29,9 +31,10 @@ describe('AuthService.resetPassword', () => {
     const user = validUser();
     const { service, repo, mailService } = build(user);
     await expect(
-      service.resetPassword({ token: '123456', newPassword: 'NewPass1!', confirmNewPassword: 'NewPass1!' }),
+      service.resetPassword({ email: 'a@x.com', token: '123456', newPassword: 'NewPass1!', confirmNewPassword: 'NewPass1!' }),
     ).resolves.toEqual({ message: 'Password has been reset successfully!' });
-    expect(repo.findOne).toHaveBeenCalledWith({ where: { verificationOtp: '123456' } });
+    // The code is checked against the named account only (never looked up across all users)
+    expect(repo.findOne).toHaveBeenCalledWith({ where: { email: 'a@x.com' } });
     expect(await bcrypt.compare('NewPass1!', user.passwordHash)).toBe(true);
     expect(user.verificationOtp).toBeNull();
     expect(user.otpExpiresAt).toBeNull();
@@ -62,13 +65,13 @@ describe('AuthService.resetPassword', () => {
   it('rejects an unknown or expired code without saving', async () => {
     const unknown = build(null);
     await expect(
-      unknown.service.resetPassword({ token: '000000', newPassword: 'NewPass1!', confirmNewPassword: 'NewPass1!' }),
+      unknown.service.resetPassword({ email: 'nobody@x.com', token: '000000', newPassword: 'NewPass1!', confirmNewPassword: 'NewPass1!' }),
     ).rejects.toThrow('Invalid or expired password reset code');
     expect(unknown.repo.save).not.toHaveBeenCalled();
 
     const expired = build({ ...validUser(), otpExpiresAt: new Date(Date.now() - 1000) });
     await expect(
-      expired.service.resetPassword({ token: '123456', newPassword: 'NewPass1!', confirmNewPassword: 'NewPass1!' }),
+      expired.service.resetPassword({ email: 'a@x.com', token: '123456', newPassword: 'NewPass1!', confirmNewPassword: 'NewPass1!' }),
     ).rejects.toThrow('Invalid or expired password reset code');
     expect(expired.repo.save).not.toHaveBeenCalled();
   });

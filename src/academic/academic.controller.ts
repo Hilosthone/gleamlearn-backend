@@ -195,15 +195,22 @@ import {
   CreateDepartmentDto, UpdateDepartmentDto 
 } from './dto/academic.dto.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
+import { AdminOnly } from '../admin/auth/admin-only.decorator.js';
+import { AdminPermission } from '../admin/auth/admin-permissions.js';
+import { CatalogIntegrityService } from '../courses/catalog-integrity.service.js';
 
 @ApiTags('Academic Structure & Management')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
 @Controller('api/v1')
 export class AcademicController {
-  constructor(private readonly academicService: AcademicService) {}
+  // Institutions, faculties and departments are platform reference data: writes are admin-only (content.manage).
+  constructor(
+    private readonly academicService: AcademicService,
+    private readonly integrity: CatalogIntegrityService,
+  ) {}
 
   // --- Institutions ---
+  @UseGuards(JwtAuthGuard)
   @Get('institutions')
   @ApiOperation({ summary: 'Get all institutions with faculties and departments' })
   @ApiResponse({ status: 200, description: 'List of institutions retrieved successfully.' })
@@ -212,6 +219,7 @@ export class AcademicController {
   }
 
   @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 10, ttl: 60000 } })
+  @AdminOnly(AdminPermission.CONTENT_MANAGE)
   @Post('institutions')
   @ApiOperation({ summary: 'Create a new institution' })
   @ApiResponse({ status: 201, description: 'Institution created successfully.' })
@@ -220,6 +228,7 @@ export class AcademicController {
   }
 
   @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 10, ttl: 60000 } })
+  @AdminOnly(AdminPermission.CONTENT_MANAGE)
   @Patch('institutions/:id')
   @ApiOperation({ summary: 'Update an institution' })
   @ApiResponse({ status: 200, description: 'Institution updated successfully.' })
@@ -228,14 +237,17 @@ export class AcademicController {
   }
 
   @Throttle({ short: { limit: 1, ttl: 5000 }, long: { limit: 5, ttl: 60000 } })
+  @AdminOnly(AdminPermission.CONTENT_MANAGE)
   @Delete('institutions/:id')
   @ApiOperation({ summary: 'Delete an institution' })
   @ApiResponse({ status: 200, description: 'Institution deleted successfully.' })
-  removeInstitution(@Param('id') id: string) {
+  async removeInstitution(@Param('id') id: string) {
+    await this.integrity.assertInstitutionDeletable(id); // 409 instead of cascading
     return this.academicService.removeInstitution(id);
   }
 
   // --- Faculties ---
+  @UseGuards(JwtAuthGuard)
   @Get('faculties')
   @ApiOperation({ summary: 'Get all faculties' })
   @ApiResponse({ status: 200, description: 'List of faculties retrieved successfully.' })
@@ -244,6 +256,7 @@ export class AcademicController {
   }
 
   @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 15, ttl: 60000 } })
+  @AdminOnly(AdminPermission.CONTENT_MANAGE)
   @Post('faculties')
   @ApiOperation({ summary: 'Create a new faculty' })
   @ApiResponse({ status: 201, description: 'Faculty created successfully.' })
@@ -252,6 +265,7 @@ export class AcademicController {
   }
 
   @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 15, ttl: 60000 } })
+  @AdminOnly(AdminPermission.CONTENT_MANAGE)
   @Patch('faculties/:id')
   @ApiOperation({ summary: 'Update a faculty' })
   @ApiResponse({ status: 200, description: 'Faculty updated successfully.' })
@@ -260,14 +274,17 @@ export class AcademicController {
   }
 
   @Throttle({ short: { limit: 1, ttl: 5000 }, long: { limit: 5, ttl: 60000 } })
+  @AdminOnly(AdminPermission.CONTENT_MANAGE)
   @Delete('faculties/:id')
   @ApiOperation({ summary: 'Delete a faculty' })
   @ApiResponse({ status: 200, description: 'Faculty deleted successfully.' })
-  removeFaculty(@Param('id') id: string) {
+  async removeFaculty(@Param('id') id: string) {
+    await this.integrity.assertFacultyDeletable(id); // 409 instead of cascading
     return this.academicService.removeFaculty(id);
   }
 
   // --- Departments ---
+  @UseGuards(JwtAuthGuard)
   @Get('departments')
   @ApiOperation({ summary: 'Get all departments' })
   @ApiResponse({ status: 200, description: 'List of departments retrieved successfully.' })
@@ -276,6 +293,7 @@ export class AcademicController {
   }
 
   @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 20, ttl: 60000 } })
+  @AdminOnly(AdminPermission.CONTENT_MANAGE)
   @Post('departments')
   @ApiOperation({ summary: 'Create a new department' })
   @ApiResponse({ status: 201, description: 'Department created successfully.' })
@@ -284,6 +302,7 @@ export class AcademicController {
   }
 
   @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 20, ttl: 60000 } })
+  @AdminOnly(AdminPermission.CONTENT_MANAGE)
   @Patch('departments/:id')
   @ApiOperation({ summary: 'Update a department' })
   @ApiResponse({ status: 200, description: 'Department updated successfully.' })
@@ -292,10 +311,12 @@ export class AcademicController {
   }
 
   @Throttle({ short: { limit: 1, ttl: 5000 }, long: { limit: 5, ttl: 60000 } })
+  @AdminOnly(AdminPermission.CONTENT_MANAGE)
   @Delete('departments/:id')
   @ApiOperation({ summary: 'Delete a department' })
   @ApiResponse({ status: 200, description: 'Department deleted successfully.' })
-  removeDepartment(@Param('id') id: string) {
+  async removeDepartment(@Param('id') id: string) {
+    await this.integrity.assertDepartmentDeletable(id); // 409 instead of cascading
     return this.academicService.removeDepartment(id);
   }
 }

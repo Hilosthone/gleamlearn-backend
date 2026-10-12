@@ -289,9 +289,9 @@ export class UsersController {
   @Throttle({ short: { limit: 1, ttl: 5000 }, long: { limit: 5, ttl: 60000 } })
   @Delete('me')
   @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'Soft delete current user account (marks as deleted in backend)' })
-  deleteAccount(@CurrentUser('id') userId: string) {
-    return this.usersService.softDeleteAccount(userId);
+  @ApiOperation({ summary: 'Soft delete current user account (requires { password }; data is retained)' })
+  deleteAccount(@CurrentUser('id') userId: string, @Body() body: { password?: string }) {
+    return this.usersService.softDeleteAccount(userId, body?.password);
   }
 
   @Throttle({ short: { limit: 1, ttl: 5000 }, long: { limit: 5, ttl: 60000 } })
