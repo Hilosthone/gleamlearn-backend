@@ -155,8 +155,14 @@ export class MailService {
   constructor(private configService: ConfigService) {
     this.transporter = nodemailer.createTransport({
       host: this.configService.get<string>('SMTP_HOST'),
-      port: this.configService.get<number>('SMTP_PORT'),
-      secure: this.configService.get<number>('SMTP_PORT') === 465, // true for 465, false for other ports (like 587)
+      // Env values are strings: convert, otherwise `=== 465` is never true and port 465 (implicit TLS) hangs
+      port: Number(this.configService.get<string>('SMTP_PORT')) || 587,
+      secure: Number(this.configService.get<string>('SMTP_PORT')) === 465, // implicit TLS on 465; STARTTLS on 587
+      // Bounded timeouts (nodemailer defaults are 2 min to connect and 10 min idle): a blocked or slow SMTP
+      // server must fail fast instead of keeping sockets and requests open.
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 20_000,
       auth: {
         user: this.configService.get<string>('SMTP_USER'),
         pass: this.configService.get<string>('SMTP_PASS'),

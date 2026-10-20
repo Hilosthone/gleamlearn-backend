@@ -1738,3 +1738,130 @@ New `test/live/probe-shapes.mjs` calls every learner endpoint the learning pages
 | `oxlint src/courses src/auth/strategies test/live` | ✅ 0 warnings |
 | **Live** `test/live/learner-learning.mjs` (the real frontend `learning.ts`) | ✅ **23/23.** An admin publishes a course with a topic and 3 lessons. A learner sees it in the catalog, in search, and with the track filter; course, topics and ordered lessons load; enrol → enrolled list; fresh progress is 0 of 3; start → `startedAt`; complete → 1 of 3 = 33% (lesson pages and enrolled list agree); "continue" → lesson 2; lesson content is 2 plain-text paragraphs; XP, coins and streak load; study time loads; the welcome notification is listed; unenrol. |
 | **Live regressions** | ✅ 29/29, 54/54, 31/31 |
+
+## Batch 23 (2026-10-20): Emergency sign-up/login repair (Phase Zero)
+
+**Status:** ✅ Root cause reproduced and fixed locally (live HTTP, disposable database). 🟥 Production is still blocked by a separate issue (23b) that needs owner action. Nothing deployed.
+
+### 23a. Root cause 1 (fixed): auth responses waited for SMTP
+
+- **Evidence:** reproduced with the committed code (`c35fa01`, built in a temporary git worktree) and SMTP pointed at `test/live/smtp_blackhole.py`, a server that accepts the connection and never answers.
+
+  | Request | `HEAD` | Fixed |
+  |---|---|---|
+  | `POST /auth/signup` | 201 in **30.20 s** | 201 in **0.16 s** |
+  | `POST /auth/login` | 201 in **30.11 s** | 201 in **0.09 s** |
+  | `POST /auth/resend-verification` | 201 in **30.04 s** | 201 in **0.04 s** |
+  | `POST /auth/forgot-password` | 201 in **30.13 s** | 201 in **0.04 s** |
+
+- **Why:**
+  - Sign-up (verification email), login ("login alert" email), resend-verification, forgot-password, change-password and reset-password all `await`ed `mailService.send…()`.
+  - The nodemailer transport had **no timeouts**, so it fell back to the library defaults: 30 s for the greeting and 2 min to connect.
+  - The frontend's request timeout is also 30 s, so it gave up as the backend finished. The user saw a long spinner, then "took too long", although the account **had** been created; a retry then got 409.
+- **Fix** (`src/auth/auth.service.ts`): every auth email is sent in the background (`sendMailInBackground`). The response no longer waits; failures are logged without recipient or code.
+- **Fix** (`src/mail/mail.service.ts`):
+  - Transport timeouts: connection 10 s, greeting 10 s, socket 20 s.
+  - `SMTP_PORT` is converted to a number. `get<number>()` returns a string from env, so `=== 465` was never true and port 465 (implicit TLS) would also hang.
+- **Tests:**
+  - New `src/auth/auth-mail-nonblocking.spec.ts` (4): signup, login, forgot and resend resolve while the mail promise never settles; failures are logged without the address or code.
+  - Full suite **452/452**. `oxlint` on the changed files: 2 warnings, against 6 at `HEAD`.
+  - **Live:** `test/live/auth-timing.mjs` against the black hole is 5/5 under 5 s. `backend-workflows.mjs` with the real local mail sink is **54/54**, including verify and reset using emailed codes, so background delivery works.
+
+### 23b. Root cause 2 (production only; NOT fixed, needs owner action): every `users` query fails
+
+- **Read-only evidence** (2026-10-20, against `gleamlearn-backend.onrender.com`; no data written):
+  - `POST /auth/login` (non-existent email) → **500** in 0.97 s. It should be 401; the first step is `SELECT … FROM users WHERE email = …`.
+  - `POST /auth/forgot-password` (non-existent email) → **500**. Same single `users` lookup.
+  - `POST /admin/auth/login` → 401, correct (the `admins` table works). `GET /health/database` → `connected: true`. Public routes return 200.
+  - The deployed Swagger document matches this code: Batch 19–20 routes are present and the DTOs include `email`.
+- **Conclusion:** in production, the `users` table doesn't match the auth `User` entity, most likely a declared column that is missing. **No learner can sign up, log in or reset a password on the deployed backend, whatever the frontend does.**
+- **Likely cause:** the two `User` entities (B2) declare different columns and types for the same table. While `DB_SYNCHRONIZE` was on, sync rewrote the table on each boot (the `fullName` drop-and-add was observed locally). The local development database has all columns (`test/live/schema-check.mjs`: 0 missing).
+- **Identify the exact column** (read-only) with either of:
+  1. Render → backend → **Logs**: the `QueryFailedError … column "…" does not exist` line for a failed login.
+  2. `SCHEMA_CHECK_URL='<production DATABASE_URL>' SCHEMA_CHECK_SSL=1 node test/live/schema-check.mjs` (new; READ ONLY transaction; prints column names only).
+- **Fix options:** either add the missing column(s) with a reviewed migration (**needs approval**), or map the entity to the existing column if it was renamed. Decide once the missing column is known.
+
+### 23c. The deployed frontend is an old build
+
+`https://gleamlearn.vercel.app/auth/login` (public JavaScript, read-only) still contains the original **simulated** login: `setTimeout(() => router.push('/dashboard'), 1200)`, with an "Email or Username" field. It sends **no request to the backend**. The real sign-in, sign-up and verify screens (frontend Batch 21) aren't deployed. Redeploying needs the owner's approval, and is only useful after 23b is fixed.
+
+### Files
+
+- Modified:
+  - `src/auth/auth.service.ts`, `src/mail/mail.service.ts`
+  - `test/live/start-backend.mjs` (`E2E_SMTP_PORT`, `E2E_DIST`)
+- New:
+  - `src/auth/auth-mail-nonblocking.spec.ts`
+  - `test/live/smtp_blackhole.py`, `test/live/auth-timing.mjs`, `test/live/schema-check.mjs`
+  - `docs/KNOWN_ISSUES.md`
+
+## Batch 24 (2026-10-20): Production diagnosis kit and accurate email-delivery feedback
+
+**Status:** ✅ Unit tests, lint and live HTTP (local, disposable database). 🟥 Production sign-up/login are **still not fixed**: they need the schema check (owner) and a deploy (approval). Nothing deployed, migrated or changed in production.
+
+### Production diagnosis (read-only)
+
+- **Schema sources:** there are **no migrations**. `users` is mapped by `src/auth/entities/user.entity.ts` (used by every auth flow), by `src/users/users.entity.ts`, and by the Prisma `User` model (`prisma/schema.prisma`, `@@map("users")`). No deploy step pushes the Prisma schema: `prisma contract emit` only generates the client.
+- `/health/database` uses the same TypeORM connection as login, so the database is reachable and the `users` query itself fails.
+- **Deployed frontend:** an old build. Simulated login; `/auth/forgot-password`, `/auth/reset-password`, `/auth/verify-email` and `/admin/login` → 404; the CDN reports the page cached for about 9 days. Its login page makes no API call, so the bundle doesn't reveal which backend URL it's configured with; the owner needs to check `NEXT_PUBLIC_API_URL` on Vercel.
+- **New:**
+  - `docs/PRODUCTION_RECOVERY.md`: step-by-step Render instructions and the deployment checklist.
+  - `docs/diagnostics/production-users-schema.sql`: read-only queries, validated against the local database.
+  - `docs/migrations/proposed/2026-10-20_users_missing_columns.sql`: per-column forward and rollback SQL matching the entity exactly. Dry-run on the disposable database after dropping two columns: 17 statements OK, columns re-created with matching type, nullability and default, then rolled back. **Not executed** anywhere else.
+
+### Accurate feedback when email fails
+
+- Background-only sending (Batch 23) meant sign-up always said "check your email", even when delivery had failed.
+- Now **sign-up** and **resend-verification** wait **at most 3 s** for the verification email and return `verificationEmail: 'sent' | 'pending' | 'failed'`, with a matching message. A pending send keeps going in the background.
+- **forgot-password stays neutral** (same response whether or not the account exists), and so does login.
+- Push-notification failures no longer log the device push token.
+
+**Live HTTP, `test/live/auth-timing.mjs`, three SMTP conditions:**
+
+| SMTP | signup | resend | login | forgot |
+|---|---|---|---|---|
+| Working (local sink) | 0.19 s, `sent` | 0.09 s, `sent` | 0.08 s | 0.02 s |
+| Never answers (black hole) | 3.17 s, `pending` | 3.03 s, `pending` | 0.08 s | 0.03 s |
+| Connection refused | 0.20 s, `failed` | 0.02 s, `failed` | 0.12 s | 0.03 s |
+
+**Regression:** `backend-workflows.mjs` **54/54**, covering verify and reset with emailed codes, the wrong-code limit, restrictions and the admin content API. Full unit suite **453/453**. `oxlint`: no new warnings; the 3 remaining in the touched folders predate this work.
+
+**Files:**
+- Modified: `src/auth/auth.service.ts`, `src/notifications/notifications.service.ts`, `src/auth/auth-mail-nonblocking.spec.ts`, `test/live/auth-timing.mjs`, `docs/KNOWN_ISSUES.md`
+- New: `docs/PRODUCTION_RECOVERY.md`, `docs/diagnostics/production-users-schema.sql`, `docs/migrations/proposed/2026-10-20_users_missing_columns.sql`
+
+**Frontend follow-up:** show `verificationEmail` on the sign-up and verify screens. This waits on access to the frontend folder.
+
+## Batch 25 (2026-10-20): Production database analysis (Supabase), evidence-based correction plan
+
+**Status:** 🟥 Production sign-up/login are **not fixed**: they wait for the owner's Supabase SQL output and approval. Nothing deployed or migrated; no production SQL was run.
+
+### Findings (code and git history, verified)
+
+- **Connection** (`src/app.module.ts`):
+  - A `DATABASE_URL` containing `supabase.co` uses the URL branch with TLS. Supabase direct and pooler hosts both match, so `DATABASE_URL` alone is correct for Render.
+  - `/health/database` uses the same TypeORM connection and reports connected.
+  - TypeORM uses the default `search_path` (`public`), so the table is `public.users`.
+  - Prisma reads `process.env.DATABASE_URL` directly.
+- **Sync:** `synchronize: true` was **hard-coded** until `5a0c4cc` (2026-10-12). It has been off since, because `DB_SYNCHRONIZE` is unset.
+- **Three definitions of `users`:** two TypeORM entities and the Prisma model. There are no migrations.
+- **Reproduced locally (disposable database):**
+  - With sync on, the first boot builds the union of both entities.
+  - Once rows exist, **every synced boot fails** on the `fullName` conflict and rolls back, so the backend doesn't start. On Render, a failed deploy keeps the previous one running.
+  - So the production schema likely **froze** once users existed. The 7 auth-entity columns added on **2026-10-01** (`verification_otp`, `otp_expires_at`, `refresh_token`, `is_restricted`, `restriction_reason`, `created_at`, `updated_at`) would be missing.
+  - This is a **prediction**, to be confirmed with the SQL.
+- **Signup inserts:** columns that exist only in the other definitions are all nullable or defaulted, so inserts won't fail on them.
+
+### Prepared (not executed)
+
+- **`docs/diagnostics/users-schema-inspection.sql`** (replaces the earlier `production-users-schema.sql`).
+  - The same read-only file runs in the **Supabase SQL Editor** and in **pgAdmin**.
+  - It reports per-column status (`ok`, `MISSING`, `TYPE DIFFERS`) with **similar-named twins**, extra columns, sign-up blockers, RLS and privileges, and a row count (number only).
+  - Validated on both local databases (all `ok`). On a rolled-back simulation missing the 7 columns, it flagged all 7 and pointed `created_at`/`updated_at` to `createdAt`/`updatedAt`.
+- **`docs/migrations/proposed/2026-10-20_users_missing_columns.sql`:** adds a **decision table**.
+  - Timestamps with twins → **mapping fix in code, no migration**.
+  - The 5 OTP and restriction columns → additive, metadata-only `ADD COLUMN`.
+  - All `ok` → not a schema issue (check RLS and privileges).
+  - Statements are now schema-qualified (`public.users`). The dry run passed again.
+- **`docs/DATABASE.md` (new):** environments, connection logic, sync history, the three definitions, the guard rails.
+- **`docs/PRODUCTION_RECOVERY.md`:** Supabase-specific steps.

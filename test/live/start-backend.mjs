@@ -27,13 +27,14 @@ const overrides = {
   DATABASE_URL: `postgresql://${user}:${pass}@${host}:${port}/gleamlearn_e2e`,
   DB_SYNCHRONIZE: 'true',
   SMTP_HOST: '127.0.0.1',
-  SMTP_PORT: '2525',
+  SMTP_PORT: process.env.E2E_SMTP_PORT || '2525', // 2526 = smtp_blackhole.py (never answers)
   SMTP_USER: 'e2e',
   SMTP_PASS: 'e2e',
   AI_SERVICE_URL: process.env.E2E_AI_URL || 'http://127.0.0.1:8765',
   FRONTEND_URL: 'http://localhost:3000',
 };
-const child = spawn(process.execPath, ['dist/main.js'], { env: { ...process.env, ...overrides }, stdio: ['ignore', 'pipe', 'pipe'] });
+// E2E_DIST lets you run another build (e.g. a git worktree of HEAD) with the same safe overrides
+const child = spawn(process.execPath, [process.env.E2E_DIST || 'dist/main.js'], { env: { ...process.env, ...overrides }, stdio: ['ignore', 'pipe', 'pipe'] });
 const log = fs.createWriteStream(process.argv[2] || (process.env.TEMP || '/tmp') + '/gleamlearn-e2e-backend.log');
 child.stdout.pipe(log);
 child.stderr.pipe(log);

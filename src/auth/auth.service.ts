@@ -297,6 +297,20 @@ import { buildBasicProfileUpdate } from '../common/utils/profile-update.util.js'
 import { CodeFailureTracker, codeRequiresEmail, codesMatch } from './one-time-code.js';
 import { requireLearnerJwtSecret } from './learner-jwt.config.js';
 
+/** Delivery state of an email the learner is waiting for (see AuthService.sendWithinBudget). */
+export type EmailDelivery = 'sent' | 'pending' | 'failed';
+
+const SIGNUP_MESSAGES: Record<EmailDelivery, string> = {
+  sent: 'Account created. We sent a 6-digit verification code to your email.',
+  pending: 'Account created. Your verification code is on its way; if it has not arrived in a few minutes, request a new one.',
+  failed: 'Account created, but we could not send the verification email right now. Please request a new code shortly.',
+};
+const RESEND_MESSAGES: Record<EmailDelivery, string> = {
+  sent: 'A new verification code has been sent to your email.',
+  pending: 'A new verification code is on its way; if it has not arrived in a few minutes, try again.',
+  failed: 'We could not send the verification email right now. Please try again shortly.',
+};
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -309,6 +323,43 @@ export class AuthService {
   ) {}
 
   private readonly codeFailures = new CodeFailureTracker();
+
+  /**
+   * Sends an email without delaying the HTTP response. Sign-up, login and password flows used to await SMTP;
+   * with an unreachable or blocked SMTP server (and no transport timeouts) those requests hung for minutes,
+   * which the UI showed as an endless spinner. Failures are logged without recipients or codes.
+   */
+  /**
+   * For emails the learner is waiting for (verification codes): waits at most `budgetMs`, then reports what
+   * happened so the UI can say so — 'sent', 'failed' (the SMTP server refused or errored), or 'pending'
+   * (still trying; it keeps going in the background). The HTTP response is never held longer than the budget.
+   */
+  private async sendWithinBudget(label: string, send: () => Promise<unknown>, budgetMs = 3000): Promise<EmailDelivery> {
+    const outcome = Promise.resolve()
+      .then(send)
+      .then(
+        () => 'sent' as const,
+        () => {
+          console.warn(`⚠️ Mail: the ${label} could not be delivered.`);
+          return 'failed' as const;
+        },
+      );
+    let timer: NodeJS.Timeout | undefined;
+    const budget = new Promise<'pending'>((resolve) => {
+      timer = setTimeout(() => resolve('pending'), budgetMs);
+    });
+    try {
+      return await Promise.race([outcome, budget]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  private sendMailInBackground(label: string, send: () => Promise<unknown>): void {
+    void Promise.resolve()
+      .then(send)
+      .catch(() => console.warn(`⚠️ Mail: the ${label} could not be delivered.`));
+  }
 
   /**
    * Finds the account a verification / reset code belongs to. The request must name the account (`email`);
@@ -392,13 +443,10 @@ export class AuthService {
     requireLearnerJwtSecret(); // 503 instead of signing with a missing secret
     const accessToken = this.jwtService.sign(payload);
 
-    // Send verification email with 6-digit OTP (passing fullName and otpCode correctly)
-    try {
-      await this.mailService.sendVerificationEmail(savedUser.email, savedUser.fullName, otpCode);
-    } catch (mailError) {
-      // Never log the code: it grants account access. The user can request a new one.
-      console.warn('⚠️ SMTP/Mail warning: verification email could not be delivered.');
-    }
+    // Waits at most 3 s for the verification email, then reports the delivery state (see sendWithinBudget)
+    const verificationEmail = await this.sendWithinBudget('verification email', () =>
+      this.mailService.sendVerificationEmail(savedUser.email, savedUser.fullName, otpCode),
+    );
 
     // Trigger dual-layer welcome notification safely
     try {
@@ -413,8 +461,9 @@ export class AuthService {
     }
 
     return {
-      message: 'Account created successfully. Please check your email for the 6-digit verification code.',
+      message: SIGNUP_MESSAGES[verificationEmail],
       accessToken,
+      verificationEmail, // 'sent' | 'pending' | 'failed' (additive): lets the UI tell the learner what happened
       data: result,
     };
   }
@@ -439,11 +488,8 @@ export class AuthService {
     const accountStatus = AccountStatusService.stateOf(status);
 
     // Send login welcome/alert email asynchronously (fails gracefully if SMTP is down)
-    try {
-      await this.mailService.sendLoginWelcomeEmail(user.email, user.fullName);
-    } catch (mailError) {
-      console.warn('⚠️ Could not send login welcome email via SMTP transporter.');
-    }
+    // Not awaited: an unreachable or slow SMTP server must never hold the HTTP response (see sendMailInBackground)
+    this.sendMailInBackground('login alert email', () => this.mailService.sendLoginWelcomeEmail(user.email, user.fullName));
 
     const payload = { sub: user.id, email: user.email, username: user.username, type: LEARNER_TOKEN_TYPE };
     requireLearnerJwtSecret(); // 503 instead of signing with a missing secret
@@ -513,11 +559,8 @@ export class AuthService {
     await this.userRepository.save(user);
 
     // 🔔 Send security alert email for password changes initiated from settings
-    try {
-      await this.mailService.sendPasswordChangedEmail(user.email, user.fullName);
-    } catch (mailError) {
-      console.warn('⚠️ Could not send password changed notification email via SMTP.');
-    }
+    // Not awaited: an unreachable or slow SMTP server must never hold the HTTP response (see sendMailInBackground)
+    this.sendMailInBackground('password-changed email', () => this.mailService.sendPasswordChangedEmail(user.email, user.fullName));
 
     return { message: 'Password changed successfully' };
   }
@@ -562,14 +605,12 @@ export class AuthService {
     user.otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
     await this.userRepository.save(user);
 
-    try {
-      await this.mailService.sendVerificationEmail(user.email, user.fullName, otpCode);
-    } catch {
-      // Never log the code: it grants account access.
-      console.warn('⚠️ SMTP/Mail warning: verification email could not be delivered.');
-    }
+    // Not awaited: an unreachable or slow SMTP server must never hold the HTTP response (see sendMailInBackground)
+    const verificationEmail = await this.sendWithinBudget('verification email', () =>
+      this.mailService.sendVerificationEmail(user.email, user.fullName, otpCode),
+    );
 
-    return { message: `New verification code resent to ${email}` };
+    return { message: RESEND_MESSAGES[verificationEmail], verificationEmail };
   }
 
   async forgotPassword(email: string) {
@@ -581,12 +622,8 @@ export class AuthService {
       user.otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
       await this.userRepository.save(user);
 
-      try {
-        await this.mailService.sendPasswordResetEmail(user.email, user.fullName, otpCode);
-      } catch {
-        // Never log the reset code or the recipient: the response stays identical either way.
-        console.warn('⚠️ SMTP/Mail warning: password reset email could not be delivered.');
-      }
+      // Not awaited: an unreachable or slow SMTP server must never hold the HTTP response (see sendMailInBackground)
+      this.sendMailInBackground('password reset email', () => this.mailService.sendPasswordResetEmail(user.email, user.fullName, otpCode));
     }
 
     return { message: `Password reset instructions sent to ${email}` };
@@ -621,11 +658,8 @@ export class AuthService {
     await this.userRepository.save(user);
 
     // 🔔 Send success confirmation email for the password reset flow
-    try {
-      await this.mailService.sendPasswordResetSuccessEmail(user.email, user.fullName);
-    } catch (mailError) {
-      console.warn('⚠️ Could not send password reset success email via SMTP.');
-    }
+    // Not awaited: an unreachable or slow SMTP server must never hold the HTTP response (see sendMailInBackground)
+    this.sendMailInBackground('password-reset confirmation email', () => this.mailService.sendPasswordResetSuccessEmail(user.email, user.fullName));
 
     return { message: 'Password has been reset successfully!' };
   }

@@ -143,7 +143,8 @@ export class NotificationsService {
           data: { type, notificationId: savedNotification.id },
         });
       } catch (error) {
-        console.error(`Failed to send push notification to token ${tokenRecord.token}:`, error);
+        // Never log the push token itself (it is a credential for this device)
+        console.error(`Failed to send a push notification (token record ${tokenRecord.id}):`, error instanceof Error ? error.message : 'unknown error');
       }
     }
 
