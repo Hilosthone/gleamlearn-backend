@@ -1865,3 +1865,66 @@ New `test/live/probe-shapes.mjs` calls every learner endpoint the learning pages
   - Statements are now schema-qualified (`public.users`). The dry run passed again.
 - **`docs/DATABASE.md` (new):** environments, connection logic, sync history, the three definitions, the guard rails.
 - **`docs/PRODUCTION_RECOVERY.md`:** Supabase-specific steps.
+
+## Batch 26 (2026-10-20): `public.users` is missing in Supabase. Corrected diagnosis, recovery plan, startup schema report
+
+**Status:** 🟥 Production sign-up/login are **not fixed** (owner diagnosis and approval needed). No production SQL was run; nothing migrated or deployed.
+
+### Correction
+
+- The owner's Supabase run of revision 1 of the diagnostic failed with `42P01: relation "public.users" does not exist`.
+- Revision 1 assumed the table existed: sections 3–5 implicitly, and section 7 queried it directly. **That was wrong**, and so was the "7 missing columns" prediction.
+- The table itself is absent.
+
+### Evidence
+
+- **Code:**
+  - Both TypeORM `User` entities use `@Entity('users')`, never renamed in git history.
+  - Prisma uses `@@map("users")`.
+  - No entity sets a schema, and there's no naming strategy. So everything expects `users` on the connection's search path (`public`).
+  - There are no migrations, and no code drops or renames tables.
+- **Reproduced exactly on the disposable database** (sync on, then `DROP TABLE users CASCADE`, then the backend with **sync off**): `/health/database` connected; login **500**; forgot-password **500**; admin login 401; log `QueryFailedError: relation "users" does not exist`. These are the same symptoms as production.
+
+### New or changed
+
+- **`docs/diagnostics/users-schema-inspection.sql`, revision 2:** **catalog-only** (never reads an application table), so it is safe when tables are missing.
+  - D1–D9 cover: session identity; schemas; user, account and admin-like tables in any schema; the 62 expected tables and where they are; tables with the learner signature (`email` + `passwordHash`); foreign keys of the 8 dependent tables; their user id columns; migration tables; role-named schemas.
+  - Validated on both local databases. On rolled-back simulations it distinguishes **dropped** (no foreign key to users) from **renamed** (foreign keys follow the new name).
+- **`docs/migrations/proposed/2026-10-20_users_table_recovery.sql` (not executed):**
+  - **A** rename or move back; **B** recreate **empty**, with the exact structure extracted from the app-built schema and the dependent foreign keys added **NOT VALID** (old rows untouched); **C** fix `DATABASE_URL`.
+  - **B proven:** applied to the disposable database after `DROP … CASCADE`, then the backend with sync off. `auth-timing` 5/5 and `backend-workflows` **54/54**.
+  - `…_users_missing_columns.sql` is marked **SUPERSEDED**.
+- **`src/health/schema-report.service.ts` (new, registered in `HealthModule`):** a read-only startup check that logs `Database schema check: N of 62 entity tables are MISSING: …` (names only; never throws; no DDL).
+  - Spec `src/health/schema-report.spec.ts` (3).
+  - Live: with `users` dropped, it logs "1 of 62 … MISSING: users"; on a healthy database, "all 62 entity tables are present".
+- **`test/live/start-backend.mjs`:** `E2E_SYNC=false` reproduces production (sync off).
+- **Docs:** `docs/PRODUCTION_RECOVERY.md` (rewritten), `docs/DATABASE.md` (finding corrected; Prisma `calendar_events` is missing even locally, since nothing creates Prisma tables), `docs/KNOWN_ISSUES.md`.
+
+### Verification
+
+Full suite **456/456** (34 files). `tsc` OK. `oxlint src/health test/live`: 0 warnings.
+
+## Batch 27 (2026-10-20): NestJS ↔ FastAPI integration audit (live, mock NVIDIA) and AI-side SSRF protection
+
+**Status:** ✅ Contract verified over live HTTP through all three local services (the provider is mocked). 🟥 Production auth still waits for the owner's Supabase diagnostics (Batch 26); nothing deployed.
+
+- **Contract:**
+  - All 17 backend call sites (14 literal paths plus 3 built at runtime) resolve to the 73 FastAPI routes; **0 mismatches**.
+  - Shared-key headers (`Authorization: Bearer` and `X-API-Key`) match `verify_token`.
+  - The `context` payload is typed as an object in all three repositories.
+  - The AI service's quiz and YouTube CRUD routes are placeholders that the backend doesn't use.
+- **Live run** (`test/live/ai-integration.mjs`, **14/14**; new `test/live/mock_nim.py` and `test/live/start-ai-service.mjs`):
+  - happy path with exactly 1 provider call;
+  - learner 401 without a provider call; service-key 401;
+  - provider error → **502** with a generic message;
+  - provider timeout → 502 after about **3.1 s**;
+  - empty answer → returned as empty;
+  - AI service down → **503** in about 10 ms;
+  - SSRF URLs → 400.
+- **E2E key isolation:** `start-backend.mjs` and `start-ai-service.mjs` both use the test-only key `e2e-internal-key-not-a-secret` and a dummy NVIDIA key. Real keys are never used by the e2e runs.
+- **AI service changes** (uncommitted in `gleamlearn-ai-service`):
+  - `dependencies.py`: `ALLOWED_DOCUMENT_HOSTS` allowlist, validated manual redirects, generic fetch errors.
+  - `tests/test_document_url_policy.py` (6 tests).
+  - The `docs/` folder, 10 files.
+  - Python tests **30/30**.
+- **Backend suite:** 456/456 (unchanged).

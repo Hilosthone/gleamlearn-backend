@@ -25,12 +25,14 @@ const overrides = {
   DATABASE_HOST: host,
   DATABASE_NAME: 'gleamlearn_e2e',
   DATABASE_URL: `postgresql://${user}:${pass}@${host}:${port}/gleamlearn_e2e`,
-  DB_SYNCHRONIZE: 'true',
+  DB_SYNCHRONIZE: process.env.E2E_SYNC || 'true', // E2E_SYNC=false reproduces production (sync off since 5a0c4cc)
   SMTP_HOST: '127.0.0.1',
   SMTP_PORT: process.env.E2E_SMTP_PORT || '2525', // 2526 = smtp_blackhole.py (never answers)
   SMTP_USER: 'e2e',
   SMTP_PASS: 'e2e',
   AI_SERVICE_URL: process.env.E2E_AI_URL || 'http://127.0.0.1:8765',
+  // Test-only shared key, identical to test/live/start-ai-service.mjs: the real AI_API_KEY is never used by e2e runs
+  AI_API_KEY: process.env.E2E_AI_KEY || 'e2e-internal-key-not-a-secret',
   FRONTEND_URL: 'http://localhost:3000',
 };
 // E2E_DIST lets you run another build (e.g. a git worktree of HEAD) with the same safe overrides

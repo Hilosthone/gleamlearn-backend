@@ -60,16 +60,28 @@ The definitions disagree:
 2. As soon as `users` has rows, every later synced boot **fails** with `column "fullName" … contains null values`, and the backend doesn't start. The sync transaction rolls back, so nothing is lost.
 3. On Render, a deploy that fails to start leaves the **previous** deploy running.
 
-**Consequence (predicted, to be confirmed with the Supabase SQL):**
-- After production had its first users, the schema froze.
-- The columns added to the auth entity on **2026-10-01** never reached Supabase: `verification_otp`, `otp_expires_at`, `refresh_token`, `is_restricted`, `restriction_reason`, `created_at`, `updated_at`.
-- When `5a0c4cc` turned sync off, deploys succeeded again, and the current code started querying those columns. That gives 500 on login and forgot-password.
+**Production finding (owner, Supabase SQL Editor, 2026-10-20):**
+- **`public.users` does not exist.** `public.admins` and other user-related tables do; `auth.users` is Supabase Auth's own table.
+- The earlier prediction ("7 columns missing") is **refuted**: the whole table is absent.
+- **Reproduced exactly on the disposable database** (sync off, `users` dropped): `/health/database` connected, login 500, forgot-password 500, admin login 401, and the log shows `QueryFailedError: relation "users" does not exist`. These are the same symptoms as production.
+- **No code drops or renames tables** (searched `src`), and every definition expects `users`: both TypeORM entities use `@Entity('users')` (never renamed in git history), Prisma uses `@@map("users")`, with no schema option and no naming strategy.
+- So the table was either never created in that database, or it was removed or renamed outside the application.
+- Revision 2 of the diagnostic (D4–D7) tells these apart:
+  - **renamed or moved:** the foreign keys follow the new name;
+  - **dropped with CASCADE:** the foreign keys to `users` are gone and the dependent tables remain;
+  - **wrong project:** many expected tables are missing.
+
+**The backend now reports this itself:** `src/health/schema-report.service.ts` runs a read-only catalog check at startup and logs `Database schema check: N of 62 entity tables are MISSING: …`. It makes no changes. This takes effect after the next (approved) deploy.
+
+**Prisma:** its `calendar_events` table is missing even locally. Nothing creates Prisma tables (no `db push` or migrations), so the calendar module can't work anywhere until that is addressed.
 
 ## Diagnosis and fix
 
-- **Inspect (read-only, both environments):** `docs/diagnostics/users-schema-inspection.sql`.
-  - Validated on both local databases: section 3 shows every column as `ok`.
-  - On a simulated copy missing the seven columns, it lists all seven, and flags the `createdAt`/`updatedAt` twins for the two timestamps.
-- **Decision table and per-column SQL (not executed):** `docs/migrations/proposed/2026-10-20_users_missing_columns.sql`.
+- **Inspect (read-only, both environments):** `docs/diagnostics/users-schema-inspection.sql`, **revision 2**.
+  - It reads only system catalogs, so it runs even when tables are missing.
+  - Validated on both local databases, and on rolled-back simulations of "dropped" and "renamed".
+- **Recovery proposal (not executed):** `docs/migrations/proposed/2026-10-20_users_table_recovery.sql`, with scenario A (rename back), B (recreate empty, plus foreign keys `NOT VALID`) and C (fix `DATABASE_URL`).
+  - Scenario B was proven on the disposable database: drop `users` CASCADE, apply B, then run the backend with sync off. `auth-timing` 5/5 and `backend-workflows` **54/54** pass.
+  - `…_users_missing_columns.sql` is **superseded**.
 - **Owner steps:** `docs/PRODUCTION_RECOVERY.md`.
 - **Never** turn on `DB_SYNCHRONIZE` against Supabase. With rows present, it fails at boot; with the conflict resolved the wrong way, it can drop columns.

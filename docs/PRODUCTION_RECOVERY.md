@@ -1,76 +1,80 @@
 # Production Recovery: Learner Sign-up and Login
 
-Status **2026-10-20**. Production sign-up and login are **NOT fixed**. They count as fixed only after the deployed journey (step D) passes.
+Status **2026-10-20** (revision 2). Production sign-up and login are **NOT fixed**. They count as fixed only after the deployed journey (section E) passes.
 
-## A. What is known (evidence)
+## A. What is known
 
-| Check (read-only) | Result | Meaning |
+| Evidence | Source | Meaning |
 |---|---|---|
-| `POST /api/v1/auth/login`, unknown email | **500** in about 1 s (should be 401) | The `users` lookup fails |
-| `POST /api/v1/auth/forgot-password`, unknown email | **500** | The same single `users` lookup |
-| `POST /api/v1/admin/auth/login` | 401 (correct) | The `admins` table works |
-| `GET /api/v1/health/database` (same TypeORM connection) | `connected: true` | The database is reachable |
-| Deployed Swagger | Batch 19–20 routes present | The backend runs current code |
-| `https://gleamlearn.vercel.app` | Simulated login; `/auth/forgot-password`, `/auth/reset-password`, `/auth/verify-email` and `/admin/login` → 404; build cached for about 9 days | **The frontend is an old build** that never calls the backend |
+| **`public.users` does not exist**; `public.admins` and other user-related tables do; `auth.users` exists (Supabase Auth) | Owner, Supabase SQL Editor | The learner table the code needs is absent |
+| Login (unknown email) → 500; forgot-password → 500; admin login → 401; `/health/database` connected | Read-only HTTP against Render | Consistent with a missing `users` table |
+| **The same four results**, plus `relation "users" does not exist` in the log | Disposable local database with `users` dropped and sync off | **Reproduced exactly** |
+| All definitions expect `users` in the default schema (two TypeORM entities with `@Entity('users')`, Prisma `@@map("users")`), with no schema option and no naming strategy | Code and git history | The table was never renamed in code |
+| No code drops or renames tables | Search of `src` | Removal (if any) happened outside the app |
+| `DATABASE_URL` containing `supabase.co` → TypeORM URL branch with TLS; `search_path` default (`public`) | `src/app.module.ts` | Render's `DATABASE_URL` alone is correct; no other variables are needed |
+| `synchronize: true` hard-coded until `5a0c4cc` (2026-10-12), off since | Git history | Nothing has created or repaired tables since 2026-10-12 |
 
-**Diagnosis so far:**
-- The production `users` table doesn't match `src/auth/entities/user.entity.ts`.
-- There are no migrations; the schema was created by TypeORM `synchronize`.
-- Three definitions map `users`: two TypeORM entities and one Prisma model.
-- The exact column isn't known yet. **Don't guess; confirm it with B.**
+**Not yet known:** whether `users` was **renamed or moved**, **dropped**, never created in **this** database, or whether Render points at a **different Supabase project**. Section B decides it.
 
-## B. Information needed from Render (one of these is enough)
+## B. Read-only diagnosis in Supabase (owner)
 
-### Option 1: the error line from the logs (easiest)
+1. Supabase dashboard → the GleamLearn project → **SQL Editor** → **New query**.
+2. Paste the whole of **`docs/diagnostics/users-schema-inspection.sql` (revision 2)** → **Run**. If only one result shows, run the sections D1–D9 one at a time.
+   - It reads **only system catalogs**: it never queries an application table, so it can't fail on missing tables.
+   - It runs in a READ ONLY transaction. Row counts are planner estimates; no rows are read.
+3. Send back the results of **D2, D3, D4, D5, D6 and D9**. D4 is the most important.
 
-1. Open https://dashboard.render.com and click the **backend** service (`gleamlearn-backend`).
-2. Click **Logs** in the left menu.
-3. In another tab, open https://gleamlearn-backend.onrender.com/api/v1/health and wait until it loads, so the service is awake.
-4. Trigger one failed login from any terminal:
+**How to read it:**
+
+| Result | Scenario |
+|---|---|
+| D4: only `users` (and `calendar_events`) MISSING; D5 shows no learner-like table except `admins`; D6 has **no** foreign key pointing to a users table | **B: dropped** (most likely with CASCADE) |
+| D5 lists a table with `email` + `passwordHash` other than `admins`, and/or D6 foreign keys point to a different name or schema | **A: renamed or moved** (no data lost) |
+| D4: **many** tables MISSING | **C: wrong database**; Render's `DATABASE_URL` points elsewhere |
+| D9 returns a schema | The connecting role may resolve tables in that schema first; report it before choosing |
+
+**Also check, without sharing any value:** does Render's `DATABASE_URL` contain the **same project reference** as the Supabase dashboard address (`supabase.com/dashboard/project/<reference>`)?
+- For the pooler, the reference appears as `postgres.<reference>` in the user part.
+- For a direct connection, it appears as `db.<reference>.supabase.co`.
+
+Just answer yes or no.
+
+## C. Repair (needs approval; `docs/migrations/proposed/2026-10-20_users_table_recovery.sql`)
+
+- **A (renamed or moved):** one `RENAME`/`SET SCHEMA` back. No data change, no new table.
+- **B (dropped):**
+  1. **First** check Supabase → Database → **Backups** / point-in-time recovery for a copy that still has `users`.
+  2. Otherwise, recreate the table **empty**, with the exact structure the app built. The foreign keys from the 8 dependent tables are added **NOT VALID**, so old rows are neither touched nor rejected.
+  3. Previous learner accounts are not restored this way.
+  - **Proven locally:** drop `users` CASCADE, apply B, then run the backend with sync off. `auth-timing` 5/5 and `backend-workflows` **54/54** pass (sign-up, verify, login, reset, restriction, enrolment).
+- **C (wrong database):** correct `DATABASE_URL` on Render (owner). No SQL.
+- **Supabase Auth (`auth.users`) stays separate.** The backend doesn't use it, and it must not be modified or used as a substitute.
+- `…_users_missing_columns.sql` is **superseded**. It assumed the table existed.
+
+## D. Information from Render (optional; it speeds things up)
+
+1. Render → backend service → **Logs**.
+2. Trigger one failed login:
    `curl -X POST https://gleamlearn-backend.onrender.com/api/v1/auth/login -H "Content-Type: application/json" -d "{\"email\":\"nobody@example.test\",\"password\":\"x\"}"`
-5. In the Logs, find the red **`ERROR [ExceptionsHandler]`** line that appears, usually `QueryFailedError: column "…" does not exist`.
-6. Copy **that line and the next 3 lines**. Before sending, delete anything that looks like a password, a connection string (`postgres://…`) or a token.
+3. Copy the `QueryFailedError …` line. Remove anything that looks like a connection string or token.
+4. After the next approved deploy, the log also shows `Database schema check: … MISSING: …` at startup (read-only, new).
 
-### Option 2: run the read-only SQL in Supabase (most complete)
+## E. Deployment checklist (do not deploy until approved)
 
-Production is **Supabase** (owner confirmed 2026-10-20). Render has only `DATABASE_URL`.
-
-1. Open https://supabase.com/dashboard → the GleamLearn project → **SQL Editor** → **New query**.
-2. Paste the whole of `docs/diagnostics/users-schema-inspection.sql` and click **Run**.
-   - It's read-only, runs in a READ ONLY transaction and returns no personal data.
-   - If only the last result shows, select one numbered section at a time and run it.
-3. The same file runs locally in **pgAdmin** (Query Tool on `mycoursea_db`), so the two can be compared. Locally, section 3 shows every column as `ok`.
-4. Send back the results of **section 3** (each expected column and its status) and **section 4** (other columns). Also send sections 2, 5 and 6 if they return rows.
-
-### Also tell me (setting names and non-secret values only)
-
-- Render backend → Environment: is `NODE_ENV` set, and to what? Is `DB_SYNCHRONIZE` set? What is `SMTP_PORT` (a number, not a secret)? Is `JWT_SECRET` **present** (don't send it)?
-- Render backend → Settings: the instance type (Free or paid). The free type is believed to block outgoing email (SMTP).
-- Vercel → the frontend project → Settings → Environment Variables: the value of `NEXT_PUBLIC_API_URL`. It's public by design and ships in the browser bundle. Also, from Vercel → Deployments, the **commit** of the current production deployment.
-
-## C. After section 3 is known (needs approval)
-
-Follow the decision table at the top of `docs/migrations/proposed/2026-10-20_users_missing_columns.sql`:
-
-- **`created_at` / `updated_at` missing, but `createdAt` / `updatedAt` exist:** **no migration.** Map the auth entity to the existing columns. This is a code change; it's tested locally, then deployed with approval.
-- **`verification_otp`, `otp_expires_at`, `refresh_token`, `is_restricted` or `restriction_reason` missing:** add **only** those columns.
-  - The change is metadata-only: no table rewrite, and existing rows are untouched.
-  - A rollback is included, and it was dry-run on a disposable database.
-- **Section 3 is all `ok`:** it's not a column problem. Check section 6 (privileges and RLS) and the Render log line instead.
-
-## D. Deployment checklist (do not deploy until approved)
-
-1. ☐ The schema fix is applied, and `users-schema-inspection.sql` section 3 shows only `ok`.
-2. ☐ **Backend deploy** of the Batch 23–24 changes (non-blocking email, SMTP timeouts, delivery status). Before deploying, confirm on Render: `JWT_SECRET` is set (there's no fallback), `DB_SYNCHRONIZE` is unset, and `SUPER_ADMIN_*` is set if the admin doesn't exist yet.
-3. ☐ Read-only checks after the deploy:
+1. ☐ The repair is applied (A, B or C). D4 of the diagnostic shows `users` in `public`.
+2. ☐ **Backend deploy** of Batches 23–26 (non-blocking email, SMTP timeouts, delivery status, startup schema report). Confirm on Render first:
+   - `JWT_SECRET` is set (there's no fallback);
+   - `DB_SYNCHRONIZE` is unset;
+   - `SUPER_ADMIN_*` is set if the admin doesn't exist yet.
+3. ☐ The startup log shows `Database schema check: all 62 entity tables are present.` (or lists anything else that is missing).
+4. ☐ Read-only checks:
    - login with an unknown email → **401**;
-   - forgot-password with an unknown email → **201**;
-   - `GET /health/database` → connected.
-4. ☐ **Frontend:** set `NEXT_PUBLIC_API_URL=https://gleamlearn-backend.onrender.com/api/v1` on Vercel (Production), then deploy the current `main`.
-5. ☐ Check the deployed frontend:
-   - `/auth/forgot-password` and `/auth/verify-email` return 200;
-   - the login page shows the **Email** field, not "Email or Username".
-6. ☐ **Deployed journey (owner, with a real inbox):** sign up → the verification email arrives → verify → log in → dashboard → refresh (still signed in) → log out → `/dashboard` redirects to the login page.
-   - Only after this passes is production sign-up/login **fixed**.
-   - If the email never arrives, the sign-up response says `verificationEmail: "failed"` or `"pending"`. That's an email-delivery issue (SMTP on Render), not an auth issue.
-7. ☐ Rotate the exposed keys (`AI_API_KEY`, `ALOC_API_KEY`) at their providers, then update them on Render.
+   - forgot-password with an unknown email → **201**.
+5. ☐ **Frontend:**
+   - Vercel builds `origin/main`, which is `5d879ae` (old). Push `main` (`dff2b87` and later), or merge `devbranch` into `main`.
+   - Confirm `NEXT_PUBLIC_API_URL=https://gleamlearn-backend.onrender.com/api/v1` on Vercel Production.
+6. ☐ Deployed site:
+   - `/auth/forgot-password` and `/auth/verify-email` → 200;
+   - the login page shows **Email** (not "Email or Username").
+7. ☐ **Deployed journey (owner, real inbox):** sign up → the verification email arrives (or the page honestly says it couldn't be sent) → verify → log in → dashboard → refresh → still signed in → log out → `/dashboard` redirects to login.
+8. ☐ Rotate the exposed keys (`AI_API_KEY`, `ALOC_API_KEY`) at their providers, then update them on Render.

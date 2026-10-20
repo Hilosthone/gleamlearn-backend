@@ -1,0 +1,111 @@
+-- =====================================================================================
+-- PROPOSED, NOT EXECUTED: recovery of the application's learner table public.users
+-- =====================================================================================
+-- Context (2026-10-20): the Supabase SQL Editor confirmed public.users does NOT exist; public.admins
+-- and other user-related tables do. Every learner auth flow (TypeORM @Entity('users'), no schema,
+-- no naming strategy) therefore fails with 42P01 → HTTP 500.
+--
+-- DO NOT RUN until docs/diagnostics/users-schema-inspection.sql (revision 2) has been run in
+-- Supabase, the scenario below has been identified from its output, and the owner has approved.
+-- Supabase Auth (auth.users) is NOT used by this backend and must not be modified or substituted.
+--
+-- Choose exactly ONE scenario:
+--   A. D5 finds the learner table under another name/schema (and D6 FKs point to it)
+--      → rename/move it back. No data is lost. NO new table.
+--   B. D4 shows only "users" (and calendar_events) MISSING, D5 finds no learner-like table,
+--      D6 shows no FK to any users table → it was dropped (… CASCADE). First check backups
+--      (Supabase → Database → Backups / PITR). If none can be restored, recreate it EMPTY (below).
+--   C. D4 shows MANY tables MISSING → Render's DATABASE_URL points at a different project/database.
+--      → fix the Render setting (owner). NO SQL here.
+-- =====================================================================================
+
+
+-- ===================== SCENARIO A: rename / move back (example names) =====================
+-- BEGIN;
+-- ALTER TABLE public."<name_found_in_D5>" RENAME TO users;          -- if renamed in public
+-- -- or: ALTER TABLE "<schema_found_in_D5>".users SET SCHEMA public;  -- if it is in another schema
+-- COMMIT;
+-- Rollback: the inverse RENAME / SET SCHEMA.
+
+
+-- ===================== SCENARIO B: recreate the table (EMPTY) =====================
+-- Exact structure as TypeORM synchronize created it from the current code (extracted from a
+-- disposable local database built by the app; union of both User entities so neither breaks).
+-- Impact: creates ONE new empty table. No existing table or row is changed. Previous learner
+-- accounts are NOT restored by this (they would have to come from a backup); people re-register.
+-- id default uses the built-in gen_random_uuid() (PostgreSQL 13+), so no extension is needed.
+
+-- BEGIN;
+-- CREATE TABLE public.users (
+--   "id" uuid DEFAULT gen_random_uuid() NOT NULL,
+--   "fullName" character varying(150) NOT NULL,
+--   "username" character varying(100) NOT NULL,
+--   "email" character varying(255) NOT NULL,
+--   "passwordHash" character varying NOT NULL,
+--   "dateOfBirth" character varying,
+--   "country" character varying(100),
+--   "educationType" character varying,
+--   "secondarySchool" character varying,
+--   "secondaryClass" character varying,
+--   "secondaryStream" character varying,
+--   "university" character varying,
+--   "faculty" character varying,
+--   "department" character varying,
+--   "courseOfStudy" character varying,
+--   "level" character varying,
+--   "examAimOrGoals" character varying,
+--   "preferredStudyTime" character varying,
+--   "isEmailVerified" boolean DEFAULT false NOT NULL,
+--   "verification_otp" character varying(6),
+--   "otp_expires_at" timestamp without time zone,
+--   "refresh_token" text,
+--   "is_restricted" boolean DEFAULT false NOT NULL,
+--   "restriction_reason" text,
+--   "created_at" timestamp without time zone DEFAULT now() NOT NULL,
+--   "updated_at" timestamp without time zone DEFAULT now() NOT NULL,
+--   -- columns of the second User entity (src/users/users.entity.ts) and Prisma; all nullable or defaulted
+--   "institution" character varying,
+--   "levelOrClass" character varying,
+--   "preferredLearningPace" character varying,
+--   "academicGoals" text,
+--   "isFrozen" boolean DEFAULT false NOT NULL,
+--   "role" character varying DEFAULT 'student' NOT NULL,
+--   "createdAt" timestamp without time zone DEFAULT now() NOT NULL,
+--   "updatedAt" timestamp without time zone DEFAULT now() NOT NULL,
+--   "deletedAt" timestamp without time zone,
+--   CONSTRAINT "PK_a3ffb1c0c8416b9fc6f907b7433" PRIMARY KEY ("id"),
+--   CONSTRAINT "UQ_97672ac88f789774dd47f7c8be3" UNIQUE ("email"),
+--   CONSTRAINT "UQ_fe0bb3f6520ee0469504521e710" UNIQUE ("username")
+-- );
+--
+-- -- Foreign keys from the dependent tables. Existing rows in those tables reference users that no longer
+-- -- exist, so the constraints are added NOT VALID: they protect every NEW row, do not touch or delete old
+-- -- rows, and do not fail on them. (Cleaning or validating old rows is a separate, data-changing decision.)
+-- ALTER TABLE public.coin_transactions     ADD CONSTRAINT "FK_e85b0a5bf336ec85a9c84c1c391" FOREIGN KEY ("user_id") REFERENCES public.users("id") ON DELETE CASCADE NOT VALID;
+-- ALTER TABLE public.decks                 ADD CONSTRAINT "FK_d60e048034edfd232e0b8cedaeb" FOREIGN KEY ("userId")  REFERENCES public.users("id") ON DELETE CASCADE NOT VALID;
+-- ALTER TABLE public.enrollments           ADD CONSTRAINT "FK_de33d443c8ae36800c37c58c929" FOREIGN KEY ("userId")  REFERENCES public.users("id") ON DELETE CASCADE NOT VALID;
+-- ALTER TABLE public.library_favorites     ADD CONSTRAINT "FK_6839f79ea05acf9da28dee3fbb0" FOREIGN KEY ("userId")  REFERENCES public.users("id") ON DELETE CASCADE NOT VALID;
+-- ALTER TABLE public.library_saved_courses ADD CONSTRAINT "FK_7b79ae3ee5724ad537aaa2310f9" FOREIGN KEY ("userId")  REFERENCES public.users("id") ON DELETE CASCADE NOT VALID;
+-- ALTER TABLE public.user_achievements     ADD CONSTRAINT "FK_3ac6bc9da3e8a56f3f7082012dd" FOREIGN KEY ("userId")  REFERENCES public.users("id") ON DELETE CASCADE NOT VALID;
+-- ALTER TABLE public.user_badges           ADD CONSTRAINT "FK_7043fd1cb64ec3f5ebdb878966c" FOREIGN KEY ("userId")  REFERENCES public.users("id") ON DELETE CASCADE NOT VALID;
+-- ALTER TABLE public.xp_transactions       ADD CONSTRAINT "FK_0c00e30c10daa7e964c62206729" FOREIGN KEY ("userId")  REFERENCES public.users("id") ON DELETE CASCADE NOT VALID;
+--   (Skip any line whose table D4 reports MISSING, or whose constraint D6 already lists.)
+-- COMMIT;
+--
+-- Supabase-specific: the table is created by the SQL Editor's role. Supabase may warn that RLS is
+-- disabled on a public table; the backend connects with the database role (not the anon/PostgREST key),
+-- so do NOT enable RLS without a policy for that role. Also confirm the Supabase REST API (anon key) is
+-- not used by the frontend for this table — it is not (the frontend only calls the NestJS API).
+--
+-- Rollback (only right after creation, while it is still empty):
+-- BEGIN;
+-- ALTER TABLE public.coin_transactions DROP CONSTRAINT IF EXISTS "FK_e85b0a5bf336ec85a9c84c1c391";
+-- ... (same for the other seven constraints) ...
+-- DROP TABLE IF EXISTS public.users;   -- only if it contains no rows: SELECT count(*) FROM public.users; must be 0
+-- COMMIT;
+--
+-- Verification (owner, read-only):
+--   1. Re-run docs/diagnostics/users-schema-inspection.sql → D4 shows "users" in public; D6 lists the 8 FKs.
+--   2. POST https://gleamlearn-backend.onrender.com/api/v1/auth/login with an unknown email → 401 (not 500).
+--   3. POST .../auth/forgot-password with an unknown email → 201 (not 500).
+--   4. Then (approved) a real sign-up with a test address, verification, login, dashboard, refresh, logout.

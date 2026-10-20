@@ -1,3 +1,9 @@
+-- #####################################################################################
+-- SUPERSEDED — DO NOT USE. This file assumed public.users exists. The owner confirmed in Supabase
+-- (2026-10-20) that public.users does NOT exist. Use 2026-10-20_users_table_recovery.sql instead,
+-- after running docs/diagnostics/users-schema-inspection.sql (revision 2).
+-- #####################################################################################
+
 -- =====================================================================================
 -- PROPOSED, NOT EXECUTED: add the users columns the login code needs (Known Issue P0)
 -- =====================================================================================

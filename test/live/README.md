@@ -27,6 +27,12 @@ node test/live/frontend-clients.mjs ../gleamlearn-landing .   # the real fronten
 node test/live/learner-session.mjs ../gleamlearn-landing     # Phase 2: learner sign-up/verify/sign-in, onboarding, freeze/delete, ownership
 node test/live/learner-learning.mjs ../gleamlearn-landing    # Phase 3: catalog, enrolment, lessons, progress, stats
 node test/live/probe-shapes.mjs                              # prints the response STRUCTURE of learner endpoints (no values)
+# Cross-service AI contract (mock NVIDIA; proves NestJS → FastAPI wiring, NOT real NIM calls):
+python test/live/mock_nim.py 8799 &                                   # OpenAI-compatible stand-in, 127.0.0.1 only
+node test/live/start-ai-service.mjs ../gleamlearn-ai-service &        # real FastAPI with test key + dummy NVIDIA key
+node test/live/ai-integration.mjs                                     # 14 checks
+# Email behaviour: python test/live/smtp_blackhole.py 2526 & then E2E_SMTP_PORT=2526 node test/live/start-backend.mjs; node test/live/auth-timing.mjs
+# Production-like schema (sync off): E2E_SYNC=false node test/live/start-backend.mjs
 node test/live/e2e-db.mjs drop                   # optional clean-up
 ```
 

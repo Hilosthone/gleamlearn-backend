@@ -4,14 +4,14 @@ Status as of **2026-10-20**. Each entry gives the evidence, the impact and what 
 
 ## 🟥 P0: Sign-up, login and password reset fail on the deployed backend (owner action)
 
-- **Symptom:** `POST /api/v1/auth/login` and `POST /api/v1/auth/forgot-password` return **500** on `gleamlearn-backend.onrender.com`, even for an email that doesn't exist (they should return 401 / 201). Admin login and public routes work, and the database is connected.
-- **Cause (narrowed):** the production `users` table doesn't match the auth `User` entity (`src/auth/entities/user.entity.ts`). The first operation of every learner auth flow, `SELECT … FROM users WHERE email = $1`, fails, which means a declared column is missing. The local database has every column.
-- **Step-by-step guide:** `docs/PRODUCTION_RECOVERY.md`. The read-only queries are in `docs/diagnostics/users-schema-inspection.sql`, and a proposed fix SQL (not executed; dry-run on a disposable database) is in `docs/migrations/proposed/2026-10-20_users_missing_columns.sql`.
-- **Find the column** (read-only), using either:
-  - Render → backend service → **Logs**: look for `QueryFailedError: column "…" does not exist` after a failed login.
-  - `SCHEMA_CHECK_URL='<production DATABASE_URL>' SCHEMA_CHECK_SSL=1 node test/live/schema-check.mjs`. It runs in a READ ONLY transaction and prints column names only.
-- **Then:** add the column with a reviewed migration (needs approval), or map the entity to the column as it is named in production.
-- **Columns that could be missing** (declared by the auth entity but not by the users-module entity): `verification_otp`, `otp_expires_at`, `refresh_token`, `is_restricted`, `restriction_reason`, `created_at`, `updated_at`, `courseOfStudy`, `examAimOrGoals`, `faculty`, `level`, `secondaryClass`, `secondaryStream`.
+- **Symptom:** login and forgot-password return **500** on Render. Admin login works, and the database is connected.
+- **Cause (owner-confirmed 2026-10-20):** **`public.users` does not exist in Supabase**. Every learner auth query fails with `relation "users" does not exist`.
+  - Reproduced exactly on a disposable local database.
+  - The earlier "missing columns" hypothesis is **refuted**.
+- **Next:** `docs/PRODUCTION_RECOVERY.md`:
+  1. Run the read-only `docs/diagnostics/users-schema-inspection.sql` (revision 2, catalog-only) to tell renamed, dropped and wrong-project apart.
+  2. Apply the matching scenario from `docs/migrations/proposed/2026-10-20_users_table_recovery.sql`. **This needs approval**; nothing has been executed.
+- `auth.users` is Supabase Auth's table. The backend doesn't use it, and it must stay separate.
 
 ## 🟧 P1: The deployed frontend is an old build with simulated login (owner action)
 
