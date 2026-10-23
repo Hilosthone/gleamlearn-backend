@@ -1,3 +1,5 @@
+-- SUPERSEDED (2026-10-23) by 2026-10-23_restore_public_users.sql and docs/PRODUCTION_USERS_TABLE_RECOVERY_PLAN.md.
+-- Kept for history; do not run.
 -- =====================================================================================
 -- PROPOSED, NOT EXECUTED: recovery of the application's learner table public.users
 -- =====================================================================================

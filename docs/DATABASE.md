@@ -1,5 +1,7 @@
 # Database
 
+> **2026-10-23:** the owner confirmed `users` and `calendar_events` are missing, with no foreign keys to `users` and no learners. The current proposal is `docs/PRODUCTION_USERS_TABLE_RECOVERY_PLAN.md`, with SQL in `docs/migrations/proposed/2026-10-23_restore_public_users.sql` (not executed; awaiting approval). It supersedes the 2026-10-20 recovery file.
+
 Verified from code on **2026-10-20** (`src/app.module.ts`, entities, `prisma/`). Production facts are marked *owner-confirmed* or *read-only-verified*.
 
 ## Environments: kept strictly separate
