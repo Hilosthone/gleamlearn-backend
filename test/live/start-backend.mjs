@@ -26,6 +26,7 @@ const overrides = {
   DATABASE_NAME: 'gleamlearn_e2e',
   DATABASE_URL: `postgresql://${user}:${pass}@${host}:${port}/gleamlearn_e2e`,
   DB_SYNCHRONIZE: process.env.E2E_SYNC || 'true', // E2E_SYNC=false reproduces production (sync off since 5a0c4cc)
+  MAIL_PROVIDER: 'smtp', // the local SMTP sink, even when .env has RESEND_API_KEY (never sends real email)
   SMTP_HOST: '127.0.0.1',
   SMTP_PORT: process.env.E2E_SMTP_PORT || '2525', // 2526 = smtp_blackhole.py (never answers)
   SMTP_USER: 'e2e',

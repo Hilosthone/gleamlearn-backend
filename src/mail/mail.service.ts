@@ -136,9 +136,8 @@
 
 
 // src/mail/mail.service.ts
-import { Injectable, Logger, InternalServerErrorException } from '@nestjs/common';
+import { Inject, Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as nodemailer from 'nodemailer';
 import { getVerificationEmailTemplate } from './templates/verification.template.js';
 import { getPasswordResetEmailTemplate } from './templates/reset-password.template.js';
 import { getLoginWelcomeEmailTemplate } from './templates/login-welcome.template.js';
@@ -146,204 +145,116 @@ import { getPasswordResetSuccessEmailTemplate } from './templates/password-reset
 import { getPasswordChangedEmailTemplate } from './templates/password-changed.template.js';
 import { getTwoFactorAuthEmailTemplate } from './templates/two-factor-auth.template.js';
 import { getEmailChangeRequestEmailTemplate } from './templates/email-change-request.template.js';
+import { MAIL_TRANSPORT, MailDeliveryError, type MailTransport, type OutgoingMail } from './mail-transport.js';
+import { frontendBase, mailLinks } from './mail-links.js';
 
+/**
+ * Builds GleamLearn's emails (templates, subjects, links) and hands them to the configured MailTransport
+ * (Resend or SMTP; see mail-transport.factory.ts). Callers are unchanged by the provider.
+ *
+ * - Emails carrying a code the learner is waiting for (verification, password reset, 2FA, email change) throw
+ *   InternalServerErrorException on failure, exactly as before, so AuthService can report 'failed'.
+ * - Notifications (login alert, password changed / reset confirmation) never throw.
+ * - Logs name the email kind and the provider's error code only: no recipient, code or provider message.
+ */
 @Injectable()
 export class MailService {
-  private transporter: nodemailer.Transporter;
   private readonly logger = new Logger(MailService.name);
 
-  constructor(private configService: ConfigService) {
-    this.transporter = nodemailer.createTransport({
-      host: this.configService.get<string>('SMTP_HOST'),
-      // Env values are strings: convert, otherwise `=== 465` is never true and port 465 (implicit TLS) hangs
-      port: Number(this.configService.get<string>('SMTP_PORT')) || 587,
-      secure: Number(this.configService.get<string>('SMTP_PORT')) === 465, // implicit TLS on 465; STARTTLS on 587
-      // Bounded timeouts (nodemailer defaults are 2 min to connect and 10 min idle): a blocked or slow SMTP
-      // server must fail fast instead of keeping sockets and requests open.
-      connectionTimeout: 10_000,
-      greetingTimeout: 10_000,
-      socketTimeout: 20_000,
-      auth: {
-        user: this.configService.get<string>('SMTP_USER'),
-        pass: this.configService.get<string>('SMTP_PASS'),
-      },
+  constructor(
+    private readonly configService: ConfigService,
+    @Inject(MAIL_TRANSPORT) private readonly transport: MailTransport,
+  ) {}
+
+  private get links() {
+    return mailLinks(frontendBase(this.configService.get<string>('FRONTEND_URL')));
+  }
+
+  /** Required emails: a failure is logged and rethrown as a generic 500 (the caller decides what the learner sees). */
+  private async deliverRequired(kind: string, mail: OutgoingMail): Promise<void> {
+    try {
+      await this.transport.send(mail);
+      this.logger.log(`${kind} email sent (${this.transport.provider}).`);
+    } catch (err) {
+      this.logger.error(`${kind} email failed (${reasonOf(err)}).`);
+      throw new InternalServerErrorException(`Could not send ${kind.toLowerCase()} email`);
+    }
+  }
+
+  /** Notification emails: a failure is logged and swallowed. */
+  private async deliverOptional(kind: string, mail: OutgoingMail): Promise<void> {
+    try {
+      await this.transport.send(mail);
+      this.logger.log(`${kind} email sent (${this.transport.provider}).`);
+    } catch (err) {
+      this.logger.error(`${kind} email failed (${reasonOf(err)}).`);
+    }
+  }
+
+  /** Account verification email with the 6-digit code. */
+  async sendVerificationEmail(email: string, fullName: string, token: string): Promise<void> {
+    await this.deliverRequired('Verification', {
+      to: email,
+      subject: 'Verify Your Email Address - GleamLearn',
+      html: getVerificationEmailTemplate(fullName, this.links.verifyEmail(email), token),
     });
   }
 
-  /**
-   * Sends an account verification email to newly registered users with a 6-digit OTP.
-   */
-  async sendVerificationEmail(email: string, fullName: string, token: string): Promise<void> {
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'https://gleamlearn.vercel.app';
-    const verificationUrl = `${frontendUrl}/verify-email?token=${token}`;
-    const sender = this.configService.get<string>('MAIL_FROM') || '"GleamLearn Support" <no-reply@gleamlearn.com>';
-    const otpCode = token;
-
-    const mailOptions = {
-      from: sender,
-      to: email,
-      subject: 'Verify Your Email Address - GleamLearn',
-      html: getVerificationEmailTemplate(fullName, verificationUrl, otpCode),
-    };
-
-    try {
-      await this.transporter.sendMail(mailOptions);
-      this.logger.log(`Verification email successfully sent to ${email}`);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      this.logger.error(`Failed to send verification email: ${errorMessage}`);
-      throw new InternalServerErrorException('Could not send verification email');
-    }
-  }
-
-  /**
-   * Sends a password reset email with an OTP.
-   */
+  /** Password reset email with the 6-digit code. */
   async sendPasswordResetEmail(email: string, fullName: string, token: string): Promise<void> {
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'https://gleamlearn.vercel.app';
-    const resetUrl = `${frontendUrl}/reset-password?token=${token}`;
-    const sender = this.configService.get<string>('MAIL_FROM') || '"GleamLearn Support" <no-reply@gleamlearn.com>';
-    const otpCode = token;
-
-    const mailOptions = {
-      from: sender,
+    await this.deliverRequired('Password reset', {
       to: email,
       subject: 'Password Reset Request - GleamLearn',
-      html: getPasswordResetEmailTemplate(fullName, resetUrl, otpCode),
-    };
-
-    try {
-      await this.transporter.sendMail(mailOptions);
-      this.logger.log(`Password reset email successfully sent to ${email}`);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      this.logger.error(`Failed to send password reset email: ${errorMessage}`);
-      throw new InternalServerErrorException('Could not send password reset email');
-    }
+      html: getPasswordResetEmailTemplate(fullName, this.links.resetPassword(email), token),
+    });
   }
 
-  /**
-   * Sends a new login alert email.
-   */
+  /** New sign-in alert. The template's "Secure my account" button mails support (its default address). */
   async sendLoginWelcomeEmail(email: string, fullName: string): Promise<void> {
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'https://gleamlearn.vercel.app';
-    const resetUrl = `${frontendUrl}/settings/security`;
-    const sender = this.configService.get<string>('MAIL_FROM') || '"GleamLearn Support" <no-reply@gleamlearn.com>';
-
-    const mailOptions = {
-      from: sender,
+    await this.deliverOptional('Login alert', {
       to: email,
       subject: 'New Login Alert - GleamLearn',
-      html: getLoginWelcomeEmailTemplate(
-        fullName, 
-        'Standard Web Browser', 
-        'Chrome / Modern Browser', 
-        'Unknown Location', 
-        new Date().toLocaleString(), 
-        resetUrl
-      ),
-    };
-
-    try {
-      await this.transporter.sendMail(mailOptions);
-      this.logger.log(`Login welcome email successfully sent to ${email}`);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      this.logger.error(`Failed to send login welcome email: ${errorMessage}`);
-    }
+      html: getLoginWelcomeEmailTemplate(fullName, 'Standard Web Browser', 'Chrome / Modern Browser', 'Unknown Location', new Date().toLocaleString()),
+    });
   }
 
-  /**
-   * Sends a confirmation email when a password has been successfully reset.
-   */
+  /** Confirmation after a successful password reset. */
   async sendPasswordResetSuccessEmail(email: string, fullName: string): Promise<void> {
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'https://gleamlearn.vercel.app';
-    const signInUrl = `${frontendUrl}/login`;
-    const sender = this.configService.get<string>('MAIL_FROM') || '"GleamLearn Support" <no-reply@gleamlearn.com>';
-
-    const mailOptions = {
-      from: sender,
+    await this.deliverOptional('Password reset confirmation', {
       to: email,
       subject: 'Password Successfully Reset - GleamLearn',
-      html: getPasswordResetSuccessEmailTemplate(fullName, signInUrl),
-    };
-
-    try {
-      await this.transporter.sendMail(mailOptions);
-      this.logger.log(`Password reset success email sent to ${email}`);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      this.logger.error(`Failed to send password reset success email: ${errorMessage}`);
-    }
+      html: getPasswordResetSuccessEmailTemplate(fullName, this.links.login()),
+    });
   }
 
-  /**
-   * Sends a notification when a user changes their password from settings.
-   */
+  /** Notification after a password change from settings. */
   async sendPasswordChangedEmail(email: string, fullName: string): Promise<void> {
-    const sender = this.configService.get<string>('MAIL_FROM') || '"GleamLearn Support" <no-reply@gleamlearn.com>';
-
-    const mailOptions = {
-      from: sender,
+    await this.deliverOptional('Password changed', {
       to: email,
       subject: 'Security Alert: Password Changed - GleamLearn',
       html: getPasswordChangedEmailTemplate(fullName),
-    };
-
-    try {
-      await this.transporter.sendMail(mailOptions);
-      this.logger.log(`Password changed notification email sent to ${email}`);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      this.logger.error(`Failed to send password changed notification: ${errorMessage}`);
-    }
+    });
   }
 
-  /**
-   * Sends a Two-Factor Authentication (2FA) verification code.
-   */
+  /** Two-factor authentication code. */
   async sendTwoFactorAuthEmail(email: string, fullName: string, token: string): Promise<void> {
-    const sender = this.configService.get<string>('MAIL_FROM') || '"GleamLearn Support" <no-reply@gleamlearn.com>';
-    const otpCode = token;
-
-    const mailOptions = {
-      from: sender,
+    await this.deliverRequired('2FA', {
       to: email,
       subject: 'Your Two-Factor Authentication Code - GleamLearn',
-      html: getTwoFactorAuthEmailTemplate(fullName, otpCode),
-    };
-
-    try {
-      await this.transporter.sendMail(mailOptions);
-      this.logger.log(`2FA authentication code email sent to ${email}`);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      this.logger.error(`Failed to send 2FA email: ${errorMessage}`);
-      throw new InternalServerErrorException('Could not send 2FA email');
-    }
+      html: getTwoFactorAuthEmailTemplate(fullName, token),
+    });
   }
 
-  /**
-   * Sends an OTP confirmation code when a user requests to change their email address.
-   */
+  /** Code confirming a requested change of email address. */
   async sendEmailChangeRequestEmail(email: string, fullName: string, newEmail: string, token: string): Promise<void> {
-    const sender = this.configService.get<string>('MAIL_FROM') || '"GleamLearn Support" <no-reply@gleamlearn.com>';
-    const otpCode = token;
-
-    const mailOptions = {
-      from: sender,
+    await this.deliverRequired('Email change', {
       to: email,
       subject: 'Confirm Email Address Change - GleamLearn',
-      html: getEmailChangeRequestEmailTemplate(fullName, newEmail, otpCode),
-    };
-
-    try {
-      await this.transporter.sendMail(mailOptions);
-      this.logger.log(`Email change verification code sent to ${email}`);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      this.logger.error(`Failed to send email change request email: ${errorMessage}`);
-      throw new InternalServerErrorException('Could not send email change request email');
-    }
+      html: getEmailChangeRequestEmailTemplate(fullName, newEmail, token),
+    });
   }
+}
+
+function reasonOf(err: unknown): string {
+  return err instanceof MailDeliveryError ? err.reason : 'unexpected_error';
 }

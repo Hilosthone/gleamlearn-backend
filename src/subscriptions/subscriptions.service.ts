@@ -1,8 +1,7 @@
 // src/subscriptions/subscriptions.service.ts
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { SubscribeDto } from './dto/subscribe.dto.js';
-import { InitializePaymentDto } from './dto/initialize-payment.dto.js';
+import { notImplementedAction } from '../admin/common/not-implemented.js';
 
 @Injectable()
 export class SubscriptionsService {
@@ -23,38 +22,11 @@ export class SubscriptionsService {
     return { active: true, subscription: sub };
   }
 
-  async subscribe(dto: SubscribeDto, userId: string) {
-    const plan = await this.prisma.subscriptionPlan.findUnique({
-      where: { id: dto.planId },
-    });
-    if (!plan) throw new NotFoundException('Subscription plan not found.');
-
-    // Deactivate existing active subscriptions
-    await this.prisma.userSubscription.updateMany({
-      where: { userId, status: 'ACTIVE' },
-      data: { status: 'CANCELLED' },
-    });
-
-    return this.prisma.userSubscription.create({
-      data: {
-        userId,
-        planId: dto.planId,
-        status: 'ACTIVE',
-        startDate: new Date(),
-        endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days default
-      },
-    });
-  }
-
   async cancelSubscription(userId: string) {
     return this.prisma.userSubscription.updateMany({
       where: { userId, status: 'ACTIVE' },
       data: { status: 'CANCELLED' },
     });
-  }
-
-  async upgradeSubscription(dto: SubscribeDto, userId: string) {
-    return this.subscribe(dto, userId); // Re-uses subscribe logic to switch active plan
   }
 
   async getSubscriptionHistory(userId: string) {
@@ -65,26 +37,34 @@ export class SubscriptionsService {
     });
   }
 
-  async initializePayment(dto: InitializePaymentDto, user: any) {
-    // Placeholder for payment gateway integration (e.g. Paystack API call)
-    return {
-      authorizationUrl: 'https://checkout.paystack.com/placeholder-url',
-      reference: `txn_${Date.now()}_${user.id}`,
-      amount: dto.amount,
-    };
+  /*
+   * Paid access is only granted after a VERIFIED payment, and no payment provider is integrated yet.
+   * These operations used to grant an ACTIVE subscription without any payment (subscribe/upgrade), report every
+   * reference as paid (verify) and return a fake checkout URL (initialize). They now refuse with 501 and change no
+   * data. Re-enable them only together with a real provider: server-side verification of the amount, currency and
+   * reference with the provider, and a signature-checked webhook.
+   */
+  private paymentsUnavailable(action: string) {
+    return notImplementedAction(action, 'payments are not integrated, so a plan cannot be granted without a verified payment');
   }
 
-  async verifyPayment(reference: string, userId: string) {
-    // Placeholder for payment verification logic
-    return {
-      reference,
-      status: 'SUCCESS',
-      message: 'Payment verified successfully.',
-    };
+  async subscribe(): Promise<never> {
+    throw this.paymentsUnavailable('Subscribing to a plan');
   }
 
-  async handleWebhook(eventPayload: any) {
-    // Handle background webhook notifications from payment providers
-    return { received: true, event: eventPayload?.event };
+  async upgradeSubscription(): Promise<never> {
+    throw this.paymentsUnavailable('Upgrading a subscription');
+  }
+
+  async initializePayment(): Promise<never> {
+    throw this.paymentsUnavailable('Starting a payment');
+  }
+
+  async verifyPayment(): Promise<never> {
+    throw this.paymentsUnavailable('Verifying a payment');
+  }
+
+  async handleWebhook(): Promise<never> {
+    throw this.paymentsUnavailable('Payment webhooks');
   }
 }
