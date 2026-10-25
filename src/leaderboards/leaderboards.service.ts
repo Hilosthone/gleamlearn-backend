@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../auth/entities/user.entity.js';
 import { XpTransaction } from '../xp/entities/xp-transaction.entity.js';
+import { AccountStatusService } from '../auth/account-status.service.js';
 
 @Injectable()
 export class LeaderboardsService {
@@ -12,6 +13,7 @@ export class LeaderboardsService {
     private readonly userRepo: Repository<User>,
     @InjectRepository(XpTransaction)
     private readonly xpRepo: Repository<XpTransaction>,
+    private readonly accountStatus: AccountStatusService,
   ) {}
 
   private async getRankingsQuery(filterColumn?: string, filterValue?: any, startDate?: Date) {
@@ -29,22 +31,20 @@ export class LeaderboardsService {
 
     const results = await query.getRawMany();
 
-    // Map user details onto rankings
-    const rankings = await Promise.all(
-      results.map(async (row, index) => {
+    // Map user details onto rankings. Leaderboards are public: accounts that no longer exist, or are deleted or
+    // frozen, are left out (they used to appear by full name), and ranks are numbered after filtering (filtered
+    // boards used to have gaps).
+    const rows = await Promise.all(
+      results.map(async (row) => {
         const user = await this.userRepo.findOne({ where: { id: row.userId } });
-        
-        // Apply secondary filtering (e.g., country, school, etc., if user profile has those fields)
-        if (filterColumn && user && (user as any)[filterColumn] !== filterValue) {
-          return null;
-        }
+        if (!user) return null;
+        if (filterColumn && (user as any)[filterColumn] !== filterValue) return null;
+        const status = await this.accountStatus.getStatus(user.id);
+        if (!status.exists || status.deleted || status.frozen) return null;
 
-        // Safely extract name fields using type assertion to support various User entity schemas
         const u = user as any;
         const displayName = u?.firstName || u?.name || u?.fullName || 'Scholar';
-
         return {
-          rank: index + 1,
           userId: row.userId,
           name: typeof displayName === 'string' ? displayName.trim() : 'Scholar',
           totalXp: Number(row.totalXp),
@@ -52,7 +52,7 @@ export class LeaderboardsService {
       }),
     );
 
-    return rankings.filter(Boolean);
+    return rows.filter((r): r is NonNullable<typeof r> => r !== null).map((r, i) => ({ rank: i + 1, ...r }));
   }
 
   async getGlobalLeaderboard() {
