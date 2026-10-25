@@ -1,7 +1,7 @@
 // src/subscriptions/subscriptions.service.ts
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { notImplementedAction } from '../admin/common/not-implemented.js';
+import { featureUnavailable } from '../common/errors/feature-unavailable.js';
 
 @Injectable()
 export class SubscriptionsService {
@@ -45,7 +45,7 @@ export class SubscriptionsService {
    * reference with the provider, and a signature-checked webhook.
    */
   private paymentsUnavailable(action: string) {
-    return notImplementedAction(action, 'payments are not integrated, so a plan cannot be granted without a verified payment');
+    return featureUnavailable(action, 'payments are not integrated, so a plan cannot be granted without a verified payment');
   }
 
   async subscribe(): Promise<never> {

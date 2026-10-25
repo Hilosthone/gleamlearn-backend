@@ -29,6 +29,14 @@ describe('ResendTransport (SDK faked: no network)', () => {
     expect(err.message).not.toContain('ada@example.test');
   });
 
+  it("silences the SDK's own console error printer (its messages can contain email addresses)", () => {
+    const sdk = ResendTransport.createClient('re_dummy_key_for_test') as unknown as { logError: (...a: unknown[]) => unknown };
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    sdk.logError({ message: 'You can only send testing emails to your own email address (ada@example.test)' }, '/emails', 403);
+    expect(consoleError).not.toHaveBeenCalled();
+    consoleError.mockRestore();
+  });
+
   it('turns a network failure into MailDeliveryError', async () => {
     const { client: c } = client(Object.assign(new Error('getaddrinfo ENOTFOUND api.resend.com'), { name: 'TypeError' }));
     const err = await new ResendTransport('key', 'x <a@resend.dev>', c).send(mail).catch((e) => e);

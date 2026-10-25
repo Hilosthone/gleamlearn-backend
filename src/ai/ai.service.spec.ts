@@ -53,22 +53,20 @@ describe('AiService document pipeline mapping', () => {
     await service.generateExam('f');
     await service.createCourseFromDocument('f');
     await service.generateLiveClass('f');
-    await service.exportPdf('f');
     const paths = post.mock.calls.map((c) => c[0]);
     expect(paths.every((p: string) => p.startsWith('/api/v1/ai/documents/f/'))).toBe(true);
-    expect(paths).toHaveLength(10);
+    expect(paths).toHaveLength(9);
   });
 
-  it('uses the corrected path for GET endpoints', async () => {
+  // These used to be forwarded to AI-service stubs (empty "success", or a fabricated PDF URL). They are now
+  // refused with 501 FEATURE_UNAVAILABLE before any call (see common/errors/feature-unavailable.spec.ts).
+  it('does not call the AI service for saved analysis, saved content, live stream or PDF export', async () => {
     const { service } = build();
-    await service.getAnalysis('f');
-    await service.getAllGeneratedContent('f');
-    await service.getLiveClassStream('f');
-    expect(get.mock.calls.map((c) => c[0])).toEqual([
-      '/api/v1/ai/documents/f/analysis',
-      '/api/v1/ai/documents/f/generated-content',
-      '/api/v1/ai/documents/f/live-class-stream',
-    ]);
+    for (const call of [service.getAnalysis('f'), service.getAllGeneratedContent('f'), service.getLiveClassStream('f'), service.exportPdf('f')]) {
+      await expect(call).rejects.toMatchObject({ status: 501 });
+    }
+    expect(get).not.toHaveBeenCalled();
+    expect(post).not.toHaveBeenCalled();
   });
 
   it('returns 404 without calling the AI service when the file does not exist', async () => {

@@ -231,3 +231,59 @@ Each phase ends with its tests. No deploy, commit or push. Production-affecting 
 - Phases 1–3 are well-bounded.
 - Phases 4–6 rebuild about 13 static screens and 3 prototype component trees (~1,850 lines) against about 150 backend routes. That is several large batches, not one pass.
 - Recommended order: 1 → 2 → 3, then 5 (practice is the core learning loop), then 4, then 6.
+
+---
+
+## 9. Update after Batch 29 (2026-10-25)
+
+Details: `docs/IMPLEMENTATION_CHANGELOG.md` (Batch 29). All changes are local, and none is committed. There are no schema changes, no new tables and no production changes.
+
+### 9.1 Confirmed root causes and status
+
+| Issue | Root cause | Status |
+|---|---|---|
+| Deleted learners on public profiles | The `deletedAt` check ran on an entity without that column (B2) | **Fixed.** `AccountStatusService` hides deleted and frozen accounts. |
+| Fake "Early Bird" achievement and placeholder stats | Hard-coded placeholders | **Fixed.** Real `user_achievements`, `user_streaks`, `enrollments` and `study_sessions`. |
+| Search 500 | Prisma models that don't exist | **Fixed.** TypeORM; no emails, answers or other learners' material leak. |
+| Sign-up 500 on long input | No DTO length limits | **Fixed.** 400 with field messages, matching the wizard limits. |
+| Case-sensitive emails | Exact string storage and lookup | **Fixed.** Normalised storage and case-insensitive lookup, with no data migration. |
+| Fabricated PDF URL and empty "success" AI responses | AI-service stubs forwarded as success | **Fixed.** `501 FEATURE_UNAVAILABLE` in the backend and the AI service. |
+| Frontend showed fake success | Library upload → processing → generated class, and lesson AI mode, were scripted | **Fixed.** Honest `FeatureUnavailable` states; 501 → kind `not_implemented` (not transient, no "try again"). |
+| CORS open to every origin | `enableCors()` without options | **Option added** (`CORS_ORIGINS`). Production unchanged until the owner sets it. |
+
+### 9.2 Email (Resend)
+
+- **Local:** `RESEND_FROM="GleamLearn <onboarding@resend.dev>"`; links stay on `https://gleamlearn.vercel.app`.
+- **Verified live through the app:** the Resend test address gets `sent`. A normal address gets an honest `failed` (403 `validation_error`: *"You can only send testing emails to your own email address … please verify a domain"*).
+- **Production email is BLOCKED** until the owner owns and verifies a domain. `vercel.app` can't be verified.
+
+### 9.3 Remaining security and functional gaps (not changed in this batch)
+
+- `POST /auth/resend-verification` reveals whether an email is registered (404).
+- `POST /auth/refresh-token` is a mock; tokens live 7 days in `localStorage`.
+- Uploaded files have no owner (B4).
+- The library index page (`/library`) still lists invented "generated class" cards. They now lead to honest "not available" screens; the real integration is library work.
+- Static prototypes still not integrated: `/ai`, `/practice`, `/exams`, `/progress`, `/history`, `/planner`, `/notifications`, `/library`.
+- The AI service's quiz CRUD, attempts and YouTube list/get routes are empty stubs (not called by the backend).
+- Document-generation results aren't persisted, so "saved content" can't exist until they are.
+- RAG, personalised recommendations and speech (STT/TTS) aren't implemented anywhere, and are now reported as unavailable.
+
+### 9.4 Needs a schema change or production configuration (approval required)
+
+| Item | Kind |
+|---|---|
+| Unique index on `lower(users.email)` | Schema |
+| `files.userId` ownership (B4) | Schema |
+| Reports/feedback tables; `calendar_events` (uuid FK) | Schema |
+| Persisting generated document content (the `ai_generated_contents` entity exists; using it may need columns) | Schema review |
+| `RESEND_API_KEY`, `RESEND_FROM` on Render, after a domain is verified | Production config |
+| `CORS_ORIGINS=https://gleamlearn.vercel.app` on Render | Production config |
+| Deploying backend, AI service and frontend | Deployment |
+
+### 9.5 Recommended next batch
+
+**Frontend core and practice loop.** Every item below already has a real backend; no schema change is needed.
+1. Share one stats query between the dashboard and the Navbar (removes the duplicate `/xp`, `/coins`, `/streak` requests).
+2. Profile editing in `/settings`.
+3. A real `/notifications` page.
+4. Rebuild `/practice` on the real quiz/test endpoints: generate → start → answer → submit once → result → review.

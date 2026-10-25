@@ -3,11 +3,13 @@ import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module.js';
 import { createGlobalValidationPipe, isRequestValidationEnabled } from './common/validation/global-validation.pipe.js';
+import { corsOptionsFromEnv } from './common/security/cors.js';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  app.enableCors();
+  // CORS_ORIGINS unset: every origin (unchanged); set it to restrict (see common/security/cors.ts)
+  app.enableCors(corsOptionsFromEnv(process.env.CORS_ORIGINS));
 
   if (isRequestValidationEnabled()) {
     app.useGlobalPipes(createGlobalValidationPipe());

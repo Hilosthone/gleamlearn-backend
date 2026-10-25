@@ -206,8 +206,8 @@ export class SearchController {
   @Get('materials')
   @ApiOperation({ summary: 'Search specifically within study materials' })
   @ApiResponse({ status: 200, description: 'List of matching study materials.' })
-  async searchMaterials(@Query() queryDto: SearchQueryDto) {
-    return this.searchService.searchMaterials(queryDto.q);
+  async searchMaterials(@Query() queryDto: SearchQueryDto, @CurrentUser() user: any) {
+    return this.searchService.searchMaterials(queryDto.q, user?.id);
   }
 
   @Throttle({ short: { limit: 2, ttl: 2000 }, long: { limit: 30, ttl: 60000 } })

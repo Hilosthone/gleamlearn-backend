@@ -130,11 +130,15 @@
 
 
 // src/users/users.service.ts
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { User } from '../auth/entities/user.entity.js';
+import { UserAchievement } from '../gamification/entities/user-achievement.entity.js';
+import { UserStreak } from '../streak/entities/user-streak.entity.js';
+import { Enrollment } from '../courses/entities/enrollment.entity.js';
+import { StudySession } from '../study-sessions/entities/study-session.entity.js';
 import { AccountStatusService } from '../auth/account-status.service.js';
 import {
   ACADEMIC_PROFILE_FIELDS,
@@ -153,6 +157,7 @@ export class UsersService {
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     private readonly accountStatus: AccountStatusService,
+    @InjectDataSource() private readonly dataSource: DataSource,
   ) {}
 
   // ==========================================
@@ -177,6 +182,11 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
     const update = buildBasicProfileUpdate(updateDto, current.email);
+    // A taken username was a unique-constraint error (500); it is a conflict the learner can fix
+    if (typeof update.username === 'string' && update.username !== current.username) {
+      const owner = await this.userRepository.findOne({ where: { username: update.username } });
+      if (owner && owner.id !== userId) throw new ConflictException('That username is already taken.');
+    }
     if (Object.keys(update).length > 0) {
       await this.userRepository.update(userId, update as any);
     }
@@ -275,13 +285,24 @@ export class UsersService {
   // PUBLIC PROFILE & DISCOVERY METHODS
   // ==========================================
 
-  async getPublicProfile(username: string) {
-    const user = (await this.userRepository.findOne({ where: { username } })) as any;
-    if (!user || user.deletedAt) {
-      throw new NotFoundException(`User @${username} not found`);
+  /**
+   * Public profiles hide deleted and frozen accounts (reported as "not found", so the account state is not
+   * revealed). The status columns (deletedAt, isFrozen) are not on the auth User entity (B2); checking
+   * `user.deletedAt` on it was always undefined, so deleted learners stayed public. AccountStatusService reads
+   * the real columns.
+   */
+  private async findPublicUser(username: string): Promise<User> {
+    const user = await this.userRepository.findOne({ where: { username } });
+    if (user) {
+      const status = await this.accountStatus.getStatus(user.id);
+      if (status.exists && !status.deleted && !status.frozen) return user;
     }
+    throw new NotFoundException(`User @${username} not found`);
+  }
 
-    // Return only public fields (hide email, tokens, passwordHash)
+  async getPublicProfile(username: string) {
+    const user = await this.findPublicUser(username);
+    // Only public fields (never email, tokens or the password hash)
     return {
       fullName: user.fullName,
       username: user.username,
@@ -289,38 +310,54 @@ export class UsersService {
       university: user.university,
       secondarySchool: user.secondarySchool,
       department: user.department,
-      level: user.levelOrClass,
+      level: user.level, // the auth entity stores the class / level in `level` (levelOrClass was always undefined)
       createdAt: user.createdAt,
     };
   }
 
+  /** Achievements the learner actually unlocked (user_achievements); previously a fabricated "Early Bird" entry. */
   async getUserAchievements(username: string) {
-    const user = (await this.userRepository.findOne({ where: { username } })) as any;
-    if (!user || user.deletedAt) {
-      throw new NotFoundException(`User @${username} not found`);
-    }
-
-    // Placeholder until achievements relation/table is built
+    const user = await this.findPublicUser(username);
+    const rows = await this.dataSource.getRepository(UserAchievement).find({
+      where: { userId: user.id },
+      relations: { achievement: true },
+      order: { unlockedAt: 'DESC' },
+    });
     return {
-      username,
-      achievements: [
-        { title: 'Early Bird', description: 'Joined during platform launch beta', unlockedAt: user.createdAt }
-      ]
+      username: user.username,
+      achievements: rows
+        .filter((row) => row.achievement)
+        .map((row) => ({ title: row.achievement.title, description: row.achievement.description, unlockedAt: row.unlockedAt })),
     };
   }
 
+  /**
+   * Real learning metrics; previously fixed placeholders (a 1-day streak for everyone). Same sources the
+   * learner's own pages use: user_streaks.currentStreak, enrollments at 100 %, and the summed duration of
+   * study sessions (hours, one decimal).
+   */
   async getUserStats(username: string) {
-    const user = (await this.userRepository.findOne({ where: { username } })) as any;
-    if (!user || user.deletedAt) {
-      throw new NotFoundException(`User @${username} not found`);
-    }
-
-    // Placeholder learning metrics
+    const user = await this.findPublicUser(username);
+    const [streak, completedCoursesCount, seconds] = await Promise.all([
+      this.dataSource.getRepository(UserStreak).findOne({ where: { userId: user.id } }),
+      this.dataSource
+        .getRepository(Enrollment)
+        .createQueryBuilder('e')
+        .where('e.userId = :userId', { userId: user.id })
+        .andWhere('e.progressPercentage >= 100')
+        .getCount(),
+      this.dataSource
+        .getRepository(StudySession)
+        .createQueryBuilder('s')
+        .select('COALESCE(SUM(s.durationSeconds), 0)', 'total')
+        .where('s.userId = :userId', { userId: user.id })
+        .getRawOne<{ total: string | number }>(),
+    ]);
     return {
-      username,
-      currentStreakDays: 1,
-      completedCoursesCount: 0,
-      totalHoursLearned: 0,
+      username: user.username,
+      currentStreakDays: streak?.currentStreak ?? 0,
+      completedCoursesCount,
+      totalHoursLearned: Math.round((Number(seconds?.total ?? 0) / 3600) * 10) / 10,
     };
   }
 }

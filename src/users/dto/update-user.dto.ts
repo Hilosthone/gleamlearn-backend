@@ -109,17 +109,19 @@
 
 // src/users/dto/update-user.dto.ts
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsOptional, IsString } from 'class-validator';
+import { IsEmail, IsOptional, IsString, MaxLength, Matches } from 'class-validator';
 
 export class UpdateUserDto {
   @ApiProperty({ example: 'Hilosthone Sulyman', description: 'Full name of the user', required: false })
   @IsOptional()
   @IsString()
+  @MaxLength(150)
   fullName?: string;
 
   @ApiProperty({ example: 'hilosthone_dev', description: 'Unique username', required: false })
   @IsOptional()
   @IsString()
+  @MaxLength(100)
   username?: string;
 
   @ApiProperty({ example: 'hilosthone@example.com', description: 'Email address', required: false })
@@ -130,11 +132,13 @@ export class UpdateUserDto {
   @ApiProperty({ example: '2000-05-15', description: 'Date of birth', required: false })
   @IsOptional()
   @IsString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'dateOfBirth must be a date in the form YYYY-MM-DD' })
   dateOfBirth?: string;
 
   @ApiProperty({ example: 'Nigeria', description: 'Country of residence', required: false })
   @IsOptional()
   @IsString()
+  @MaxLength(100)
   country?: string;
 }
 
@@ -147,43 +151,51 @@ export class UpdateAcademicProfileDto {
   })
   @IsOptional()
   @IsString()
+  @MaxLength(255)
   educationType?: string; // 'Secondary' | 'University'
 
   // --- Secondary School Track Fields ---
   @ApiProperty({ example: 'Government Secondary School', description: 'Name of secondary school', required: false })
   @IsOptional()
   @IsString()
+  @MaxLength(255)
   secondarySchool?: string;
 
   @ApiProperty({ example: 'Science', description: 'Stream or academic focus (Science, Art, Commercial)', required: false })
   @IsOptional()
   @IsString()
+  @MaxLength(255)
   secondaryStream?: string;
 
   // --- University / Tertiary Track Fields ---
   @ApiProperty({ example: 'Obafemi Awolowo University', description: 'Name of university', required: false })
   @IsOptional()
   @IsString()
+  @MaxLength(255)
   university?: string;
 
   @ApiProperty({ example: 'Faculty of Technology', description: 'University faculty', required: false })
   @IsOptional()
   @IsString()
+  @MaxLength(255)
   faculty?: string;
 
   @ApiProperty({ example: 'Computer Science and Engineering', description: 'Department name', required: false })
   @IsOptional()
   @IsString()
+  @MaxLength(255)
   department?: string;
 
   @ApiProperty({ example: 'Computer Engineering', description: 'Course or degree program', required: false })
   @IsOptional()
   @IsString()
+  @MaxLength(255)
   courseOfStudy?: string;
 
   @ApiProperty({ example: '300 Level or SSS 2', description: 'Academic level or class level', required: false })
   @IsOptional()
   @IsString()
+  @MaxLength(255)
   levelOrClass?: string;
 
   // --- Goals / Examination Target ---
@@ -194,6 +206,7 @@ export class UpdateAcademicProfileDto {
   })
   @IsOptional()
   @IsString()
+  @MaxLength(2000)
   examAimOrGoals?: string;
 }
 
@@ -201,10 +214,12 @@ export class UpdatePreferencesDto {
   @ApiProperty({ example: 'Moderate (Self-paced)', description: 'Preferred learning pace', required: false })
   @IsOptional()
   @IsString()
+  @MaxLength(255)
   preferredLearningPace?: string;
 
   @ApiProperty({ example: 'Evening (7 PM - 10 PM)', description: 'Preferred study schedule window', required: false })
   @IsOptional()
   @IsString()
+  @MaxLength(255)
   preferredStudyTime?: string;
 }

@@ -295,6 +295,7 @@ import { LEARNER_TOKEN_TYPE } from '../admin/auth/admin-jwt.config.js';
 import { AccountStatusService } from './account-status.service.js';
 import { buildBasicProfileUpdate } from '../common/utils/profile-update.util.js';
 import { CodeFailureTracker, codeRequiresEmail, codesMatch } from './one-time-code.js';
+import { findUserByEmail, normalizeEmail } from './email-identity.js';
 import { requireLearnerJwtSecret } from './learner-jwt.config.js';
 
 /** Delivery state of an email the learner is waiting for (see AuthService.sendWithinBudget). */
@@ -375,7 +376,7 @@ export class AuthService {
       if (!legacy) throw new BadRequestException(invalidMessage);
       return legacy;
     }
-    const user = await this.userRepository.findOne({ where: { email: email.trim() } });
+    const user = await findUserByEmail(this.userRepository, email);
     if (!user || !user.verificationOtp) throw new BadRequestException(invalidMessage);
     if (!codesMatch(user.verificationOtp, code)) {
       if (this.codeFailures.recordFailure(user.id)) {
@@ -391,15 +392,16 @@ export class AuthService {
   }
 
   async signup(signupDto: Record<string, any>) {
-    const { email, username, password, confirmPassword, ...onboardingData } = signupDto;
+    const { email: rawEmail, username, password, confirmPassword, ...onboardingData } = signupDto;
+    const email = normalizeEmail(rawEmail);
 
     if (password !== confirmPassword) {
       throw new ConflictException('Passwords do not match');
     }
 
-    const existingUser = await this.userRepository.findOne({
-      where: [{ email }, { username }],
-    });
+    // Email uniqueness is case-insensitive (an existing account stored with capitals still counts)
+    const existingUser =
+      (await findUserByEmail(this.userRepository, email)) ?? (await this.userRepository.findOne({ where: { username } }));
 
     if (existingUser) {
       throw new ConflictException('Email or username is already registered');
@@ -471,7 +473,7 @@ export class AuthService {
   async login(loginDto: Record<string, any>) {
     const { email, password } = loginDto;
 
-    const user = await this.userRepository.findOne({ where: { email } });
+    const user = await findUserByEmail(this.userRepository, email);
     if (!user) {
       throw new UnauthorizedException('Invalid email or password');
     }
@@ -591,7 +593,7 @@ export class AuthService {
   }
 
   async resendVerification(email: string) {
-    const user = await this.userRepository.findOne({ where: { email } });
+    const user = await findUserByEmail(this.userRepository, email);
     if (!user) {
       throw new NotFoundException('User not found');
     }
@@ -614,7 +616,7 @@ export class AuthService {
   }
 
   async forgotPassword(email: string) {
-    const user = await this.userRepository.findOne({ where: { email } });
+    const user = await findUserByEmail(this.userRepository, email);
     
     if (user) {
       const otpCode = generateOtp();

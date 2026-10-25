@@ -1928,3 +1928,115 @@ Full suite **456/456** (34 files). `tsc` OK. `oxlint src/health test/live`: 0 wa
   - The `docs/` folder, 10 files.
   - Python tests **30/30**.
 - **Backend suite:** 456/456 (unchanged).
+
+## Batch 28 (2026-10-24/25): Payments containment and the move from Nodemailer to Resend
+
+### 1. Security containment (subscriptions and payments)
+
+- **Confirmed from code:**
+  - `subscribe` and `upgrade` created an ACTIVE subscription without payment (learner JWT only);
+  - `verifyPayment` always returned `SUCCESS`, and `initializePayment` returned a fake checkout URL;
+  - the webhook accepted anything;
+  - `usage.service.ts` raises limits for active subscriptions.
+- **Change:** those five operations throw `NotImplementedException` (**501**) and touch no data. Swagger documents the 501. Reading, history and cancel are unchanged.
+- **Files:** `src/subscriptions/subscriptions.service.ts`, `src/subscriptions/subscriptions.controller.ts`, and the new `subscriptions.service.spec.ts` (8 tests).
+
+### 2. Email: Resend
+
+- **New:**
+  - `MailTransport` (`mail-transport.ts`), with `ResendTransport` and `SmtpTransport` (`transports/`);
+  - provider selection (`mail-transport.factory.ts`: `MAIL_PROVIDER`, `RESEND_API_KEY`, `RESEND_FROM`);
+  - `mail-links.ts`.
+- **`MailService`:**
+  - only builds emails now;
+  - its links point at the real frontend routes (`/auth/verify-email?email=`, `/auth/reset-password?email=`, `/auth/login`); before, all of them were broken;
+  - no recipient or code is logged;
+  - the login alert's support link is fixed.
+- **Kept:** OTP, expiry, budgets, delivery states and throttles.
+- **Privacy:** the Resend SDK's own console error printer is disabled, because it printed email addresses.
+- **Test harness:** `test/live/start-backend.mjs` forces `MAIL_PROVIDER=smtp`.
+- **Docs:** `docs/EMAIL.md`, `docs/KNOWN_ISSUES.md`, `docs/CONFIGURATION_CHECKLIST.md`.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| `npx vitest run` (whole backend) | **486/486** (38 files) |
+| `npx tsc --noEmit -p tsconfig.build.json` | 0 errors (the base `tsconfig.json` has 1,170 pre-existing errors, all in spec files: no vitest globals) |
+| `npx oxlint src/mail src/subscriptions` | clean |
+| `npx nest build` | ok |
+| Live, local: SMTP sink plus disposable DB (`E2E_SYNC=false`) | 12/12: sign-up `sent` → code and correct link → resend → verify → forgot → reset → confirmation → login |
+| Live, Resend API: testing sender to `delivered@resend.dev` | accepted; an unverified gmail.com sender is refused as `resend:validation_error` |
+
+**Not verified:** whether Render has `RESEND_API_KEY` (no access from here). It will show in the startup log after an approved deploy.
+
+## Batch 29 (2026-10-25): Public profiles, search, sign-up validation, email case, CORS option, honest "unavailable" AI features, Resend testing sender
+
+### Confirmed root causes
+
+| Issue | Root cause (from code) |
+|---|---|
+| Soft-deleted learners visible on public profiles | `UsersService` uses the auth `User` entity, which has no `deletedAt`/`isFrozen` (B2). `user.deletedAt` was always `undefined`. |
+| Fabricated public data | `getUserAchievements` returned a hard-coded "Early Bird"; `getUserStats` returned `currentStreakDays: 1` and zeros; `level: user.levelOrClass` doesn't exist on the entity. |
+| Search 500 | `SearchService` used Prisma models `course`, `topic`, `question` and `studyMaterial`, which aren't in `prisma/schema.prisma` (it only has `User` and `CalendarEvent`), so they're `undefined` at runtime. User search also returned other learners' emails, and deleted accounts. |
+| Sign-up 500 on long input | `SignupDto` had no `@MaxLength`, but the columns are `varchar(150/100/255/100)`. |
+| Case-sensitive emails | Signup stored the email as typed; login, verify, resend and forgot looked it up with exact equality. |
+| Fake AI results | AI-service stubs: `export-pdf` returned a non-existent Supabase URL; `analysis`, `generated-content` and `live-class-stream` returned "success" with no data; voice transcribe and synthesize had no provider; recommendations ignored the learner and invented courses. The backend forwarded all of them as success. |
+
+### Changes
+
+- **Public profile** (`src/users/users.service.ts`): `findPublicUser` checks `AccountStatusService` (deleted or frozen gives 404, same message). Achievements come from `user_achievements`; stats from `user_streaks`, `enrollments` (100 %) and `study_sessions`; `level` from `level`. `UsersService` now also injects `DataSource`.
+- **Search** (`src/search/*`):
+  - rewritten on TypeORM (`ILIKE … ESCAPE`, with wildcards escaped);
+  - questions without `correctAnswer`/`explanation`;
+  - materials = the learner's own notes (files excluded: no owner column, B4);
+  - users = id, name, username (no email), deleted and frozen excluded;
+  - query trimmed and capped at 100 characters. Routes and response shape unchanged; `PrismaService` removed from `SearchModule`.
+- **Sign-up validation** (`src/auth/dto/signup.dto.ts`):
+  - lengths: name 150, username 100, email 255, password 6–128, country 100, other text 255, `examAimOrGoals` 2,000;
+  - `dateOfBirth` must be `YYYY-MM-DD`;
+  - names are trimmed;
+  - errors are 400 with field messages, which the wizard maps to its steps.
+- **Email identity** (`src/auth/email-identity.ts`): `normalizeEmail` and `findUserByEmail` (exact normalised match, then `LOWER(email)` for legacy rows). Used by signup (stores lowercase; duplicate check is case-insensitive), login, verify, resend, forgot and reset. No data migration.
+- **CORS** (`src/common/security/cors.ts`, `src/main.ts`): optional `CORS_ORIGINS` allowlist. Unset keeps the previous behaviour.
+- **Unavailable features** (`src/common/errors/feature-unavailable.ts`): one 501 body, `{ statusCode, error, code: 'FEATURE_UNAVAILABLE', feature, message }`.
+  - Used for document `analysis`, `generated-content`, `live-class-stream` and `export-pdf` (`src/ai/ai.service.ts`), voice `transcribe` and `synthesize`, all six recommendation routes, and the payment operations (replacing the admin-style message).
+  - No AI-service call is made for them.
+- **AI service** (`gleamlearn-ai-service`): the same routes answer 501 `FEATURE_UNAVAILABLE` after authentication (`dependencies.feature_unavailable`). The fake PDF URL is removed.
+- **Email:** the local `.env` has `RESEND_FROM="GleamLearn <onboarding@resend.dev>"`. `test/live/start-backend.mjs` accepts `E2E_MAIL_PROVIDER=resend`.
+
+### Tests added
+
+| File | Tests |
+|---|---|
+| `src/users/public-profile.spec.ts` | 7 |
+| `src/search/search.service.spec.ts` | 7 |
+| `src/auth/dto/signup.dto.spec.ts` | 12 |
+| `src/auth/email-identity.spec.ts` | 4 |
+| `src/auth/email-normalization.spec.ts` | 5 |
+| `src/common/security/cors.spec.ts` | 3 |
+| `src/common/errors/feature-unavailable.spec.ts` | 4 |
+| `src/ai/ai.service.spec.ts` | the two forwarding tests replaced by one asserting 501 and no AI call |
+| `test/support/` (test-only fakes, excluded from the build) | — |
+
+### Results (2026-10-25)
+
+| Check | Result |
+|---|---|
+| `npx vitest run` | **528/528** (45 files; was 486) |
+| `npx tsc --noEmit -p tsconfig.build.json` | 0 errors |
+| `npx oxlint src/ test/` | exit 0. Warnings only, all pre-existing (identical at `HEAD` for the touched files: unused imports and parameters). |
+| `npx nest build` | ok |
+| AI service `python -m unittest discover -s tests -t .` | **33/33** (was 30) |
+| Live Resend through the app (local, disposable DB) | **7/7**: testing sender chosen; Resend test address → `sent`; normal address → honest `failed` and 403 `validation_error`; logs without addresses |
+
+The base `tsconfig.json` still reports pre-existing errors in spec files (no vitest globals); they're unrelated.
+
+### Incident during the batch (fixed before testing)
+
+- **What happened:** several source files keep an older, commented-out copy of the class above the live code. Text-anchored edits first matched that comment:
+  - `users.service.ts` lost its live methods (restored from `HEAD`, which was otherwise unchanged, and re-applied with live-only anchors);
+  - `auth.service.ts` had a stray statement in the comment block, and the live `signup` wasn't normalised;
+  - `ai-voice.controller.ts` had an import added in the comment.
+- **How it was caught:** the type check and a scan of the diffs for edited comment lines.
+- **Verification:** all were corrected and re-verified. Every changed file was checked so that no `//` line changed except the intended inline comments.

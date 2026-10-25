@@ -15,12 +15,11 @@
 import { Module } from '@nestjs/common';
 import { SearchController } from './search.controller.js';
 import { SearchService } from './search.service.js';
-import { PrismaService } from '../prisma/prisma.service.js'; // <-- Import PrismaService
 
 @Module({
   imports: [],
   controllers: [SearchController],
-  providers: [SearchService, PrismaService], // <-- Include PrismaService in providers
+  providers: [SearchService], // TypeORM DataSource and AccountStatusService (global AuthModule) are injected
   exports: [SearchService],
 })
 export class SearchModule {}

@@ -26,7 +26,18 @@ export class ResendTransport implements MailTransport {
     private readonly from: string,
     client?: ResendEmailsClient,
   ) {
-    this.client = client ?? (new Resend(apiKey) as unknown as ResendEmailsClient);
+    this.client = client ?? ResendTransport.createClient(apiKey);
+  }
+
+  /**
+   * The SDK prints every API error with its full message to the console unless NODE_ENV is 'production'.
+   * Those messages can contain email addresses (e.g. "You can only send testing emails to your own email
+   * address (…)"), so the SDK's printer is silenced; this transport reports the error code instead.
+   */
+  static createClient(apiKey: string): ResendEmailsClient {
+    const sdk = new Resend(apiKey) as unknown as ResendEmailsClient & { logError?: unknown };
+    if (typeof sdk.logError === 'function') sdk.logError = () => undefined;
+    return sdk;
   }
 
   async send(mail: OutgoingMail): Promise<void> {

@@ -41,10 +41,11 @@
 // src/ai-voice/ai-voice.controller.ts
 import { Controller, Post, Body, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler'; // <-- 1. Import Throttle
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
 import { AiVoiceService } from './ai-voice.service.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
+import { featureUnavailable } from '../common/errors/feature-unavailable.js';
 
 @ApiTags('Voice AI')
 @ApiBearerAuth()
@@ -55,10 +56,10 @@ export class AiVoiceController {
 
   @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 10, ttl: 60000 } }) // <-- 2. Protect transcription
   @Post('transcribe')
-  @ApiOperation({ summary: 'Transcribe recorded audio clips to text' })
-  transcribe(@CurrentUser() user: any, @Body() dto: any) {
-    const payload = { ...dto, userId: user.id };
-    return this.voiceService.proxyToPython('transcribe', payload);
+  @ApiOperation({ summary: 'Transcribe recorded audio clips to text (unavailable: no speech-to-text provider)' })
+  @ApiResponse({ status: 501, description: 'FEATURE_UNAVAILABLE: no speech-to-text provider is configured.' })
+  transcribe() {
+    throw featureUnavailable('Speech transcription', 'no speech-to-text provider is configured');
   }
 
   @Throttle({ short: { limit: 1, ttl: 2000 }, long: { limit: 15, ttl: 60000 } }) // <-- 3. Protect conversational responses
@@ -71,9 +72,9 @@ export class AiVoiceController {
 
   @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 10, ttl: 60000 } }) // <-- 4. Protect text-to-speech synthesis
   @Post('synthesize')
-  @ApiOperation({ summary: 'Synthesize text answers back into audio streams/metadata' })
-  synthesize(@CurrentUser() user: any, @Body() dto: any) {
-    const payload = { ...dto, userId: user.id };
-    return this.voiceService.proxyToPython('synthesize', payload);
+  @ApiOperation({ summary: 'Synthesize text answers into audio (unavailable: no text-to-speech provider)' })
+  @ApiResponse({ status: 501, description: 'FEATURE_UNAVAILABLE: no text-to-speech provider is configured.' })
+  synthesize() {
+    throw featureUnavailable('Speech synthesis', 'no text-to-speech provider is configured');
   }
 }

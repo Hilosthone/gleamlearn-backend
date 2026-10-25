@@ -31,7 +31,9 @@
 | `REQUEST_VALIDATION` | No (default on) | `off` disables the global validation pipe | On | On | | |
 | `CLOUDINARY_CLOUD_NAME` | **Yes** | Uploads, **and the trusted-URL check for document AI generation (Batch 14)** | Uploads fail; **all document-based generation returns 422** (no URL is trusted) | Warn at startup (proposal: make required) | | |
 | `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | **Yes** for uploads | Cloudinary SDK | Uploads fail | Warn | | |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` | **Yes** for signup verification and password reset | Email delivery | Emails fail (logged warning) | Warn | | |
+| `RESEND_API_KEY`, `RESEND_FROM` (optional), `MAIL_PROVIDER` (optional) | **Yes in production** for signup verification and password reset | Email delivery through Resend (`docs/EMAIL.md`) | Emails fail; sign-up reports `verificationEmail: 'failed'` | Logged at startup (`Mail provider: …`, no values) | | |
+| `CORS_ORIGINS` (optional) | Recommended in production: `https://gleamlearn.vercel.app` | Comma-separated exact origins allowed to call the API from a browser | Every origin allowed (previous behaviour) | — | | |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` | Local development only (Resend is preferred when its key is set) | Email through SMTP | Emails fail (logged) | Logged at startup | | |
 | `FRONTEND_URL` | No (default `https://gleamlearn.vercel.app`) | Links in emails | Default | Default | | |
 | `SUPER_ADMIN_EMAIL`, `SUPER_ADMIN_PASSWORD` | **Yes** (until seeding changes) | Super Admin seeding at startup | Since Batch 20: **not seeded** (warning logged). Before, it seeded with a public hard-coded default password. | Seeding skipped with a warning (no defaults) | | |
 | `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY` | No | Push notifications | Push disabled or fails | Warn | | |
@@ -64,7 +66,7 @@ On a Render **Shell** for each service (or locally), print only whether each var
 
 ```sh
 # Backend
-node -e "for (const k of ['NODE_ENV','JWT_SECRET','ADMIN_JWT_SECRET','DATABASE_URL','DATABASE_HOST','DATABASE_USER','DATABASE_PASSWORD','DATABASE_NAME','AI_SERVICE_URL','AI_API_KEY','CLOUDINARY_CLOUD_NAME','CLOUDINARY_API_KEY','CLOUDINARY_API_SECRET','SMTP_HOST','SMTP_USER','SMTP_PASS','MAIL_FROM','SUPER_ADMIN_EMAIL','SUPER_ADMIN_PASSWORD','DB_SYNCHRONIZE']) { const v = process.env[k]; console.log(k.padEnd(24), v ? 'SET (len ' + v.length + ')' : 'MISSING'); }"
+node -e "for (const k of ['NODE_ENV','JWT_SECRET','ADMIN_JWT_SECRET','DATABASE_URL','DATABASE_HOST','DATABASE_USER','DATABASE_PASSWORD','DATABASE_NAME','AI_SERVICE_URL','AI_API_KEY','CLOUDINARY_CLOUD_NAME','CLOUDINARY_API_KEY','CLOUDINARY_API_SECRET','RESEND_API_KEY','RESEND_FROM','MAIL_PROVIDER','CORS_ORIGINS','SMTP_HOST','SMTP_USER','SMTP_PASS','MAIL_FROM','SUPER_ADMIN_EMAIL','SUPER_ADMIN_PASSWORD','DB_SYNCHRONIZE']) { const v = process.env[k]; console.log(k.padEnd(24), v ? 'SET (len ' + v.length + ')' : 'MISSING'); }"
 
 # AI service
 python -c "import os; [print(k.ljust(24), ('SET (len %d)' % len(os.environ[k])) if os.environ.get(k) else 'MISSING') for k in ['AI_API_KEY','NVIDIA_API_KEY','NVIDIA_MODEL','NVIDIA_BASE_URL']]"

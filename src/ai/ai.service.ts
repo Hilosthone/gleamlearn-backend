@@ -5,6 +5,7 @@ import { getAiHttpClient } from '../common/ai-service/ai-http.client.js';
 import { assertTrustedStoredFile } from '../common/storage/document-source.js';
 import { toAiHttpException } from '../common/ai-service/ai-error.js';
 import { GenerateAiDto } from './dto/generate-ai.dto.js';
+import { featureUnavailable } from '../common/errors/feature-unavailable.js';
 
 @Injectable()
 export class AiService {
@@ -54,8 +55,13 @@ export class AiService {
     return this.callDocumentPipeline(id, 'analyze', dto);
   }
 
-  async getAnalysis(id: string) {
-    return this.getPythonAi(`/api/v1/ai/documents/${encodeURIComponent(id)}/analysis`, 'Failed to fetch analysis');
+  /*
+   * Generation results are returned once by the generate-* endpoints and are not stored anywhere (the AI service
+   * is stateless and this service does not persist them). These read endpoints used to forward to AI-service
+   * stubs that answered "success" with no data; export-pdf returned a download URL that did not exist.
+   */
+  async getAnalysis(_id: string): Promise<never> {
+    throw featureUnavailable('Saved document analysis', 'analysis results are not stored; use the response of POST /ai/documents/{id}/analyze');
   }
 
   async generateNotes(id: string, dto?: GenerateAiDto) {
@@ -90,19 +96,19 @@ export class AiService {
     return this.callDocumentPipeline(id, 'create-course', dto);
   }
 
-  async getAllGeneratedContent(id: string) {
-    return this.getPythonAi(`/api/v1/ai/documents/${encodeURIComponent(id)}/generated-content`, 'Failed to fetch generated content');
+  async getAllGeneratedContent(_id: string): Promise<never> {
+    throw featureUnavailable('Saved generated content', 'generated notes, summaries and questions are not stored; use the response of each generate request');
   }
 
   async generateLiveClass(id: string, dto?: GenerateAiDto) {
     return this.callDocumentPipeline(id, 'generate-live-class', dto);
   }
 
-  async getLiveClassStream(id: string) {
-    return this.getPythonAi(`/api/v1/ai/documents/${encodeURIComponent(id)}/live-class-stream`, 'Failed to stream live class');
+  async getLiveClassStream(_id: string): Promise<never> {
+    throw featureUnavailable('Live class streaming', 'streaming is not implemented; POST /ai/documents/{id}/generate-live-class returns the class content');
   }
 
-  async exportPdf(id: string, dto?: GenerateAiDto) {
-    return this.callDocumentPipeline(id, 'export-pdf', dto);
+  async exportPdf(_id: string, _dto?: GenerateAiDto): Promise<never> {
+    throw featureUnavailable('PDF export', 'no PDF is generated or stored');
   }
 }
