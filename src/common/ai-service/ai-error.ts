@@ -49,17 +49,40 @@ function describe(detail: unknown): string {
   }
 }
 
+/** Codes in AI error bodies, so clients can tell our rate limit from the provider's capacity or an outage. */
+export const AI_ERROR_CODES = {
+  rateLimited: 'AI_RATE_LIMITED', // this learner sent too many AI requests (the AI service's per-learner limit)
+  providerBusy: 'AI_PROVIDER_BUSY', // the model provider is rate-limiting GleamLearn; retry later
+  providerQuota: 'AI_PROVIDER_QUOTA', // GleamLearn's provider quota/credits are used up; needs an operator
+  unavailable: 'AI_UNAVAILABLE', // AI service down, unreachable or misconfigured
+  timeout: 'AI_TIMEOUT',
+  failed: 'AI_FAILED',
+} as const;
+
+function retryAfterSeconds(error: any): number | undefined {
+  const raw = error?.response?.headers?.['retry-after'] ?? error?.response?.data?.detail?.retryAfterSeconds;
+  const n = typeof raw === 'number' ? raw : Number.parseInt(String(raw ?? ''), 10);
+  return Number.isFinite(n) && n > 0 ? Math.min(Math.ceil(n), 3600) : undefined;
+}
+
+function aiError(status: number, code: string, message: string, retryAfter?: number): HttpException {
+  return new HttpException({ statusCode: status, code, message, ...(retryAfter ? { retryAfterSeconds: retryAfter } : {}) }, status);
+}
+
 /**
  * Converts any failure from a call to the Python AI service into a safe HttpException.
- * Response body stays the standard Nest shape `{ statusCode, message }` (the frontend reads `message`).
+ * Body: `{ statusCode, code, message, retryAfterSeconds? }`; the frontend reads `message`, `code` and the wait time.
  * Logs status/code/truncated upstream detail only — never request headers, payloads or credentials.
  */
 export function toAiHttpException(error: any, operation: string): HttpException {
   if (error instanceof HttpException) return error;
 
   const status: number | undefined = error?.response?.status;
-  const detail = error?.response?.data?.detail;
+  const rawDetail = error?.response?.data?.detail;
+  const upstreamCode: string | undefined = rawDetail && typeof rawDetail === 'object' ? rawDetail.code : undefined;
+  const detail = rawDetail && typeof rawDetail === 'object' && 'message' in rawDetail ? rawDetail.message : rawDetail;
   const code: string | undefined = error?.code;
+  const wait = retryAfterSeconds(error);
 
   let result: HttpException;
 
@@ -69,22 +92,30 @@ export function toAiHttpException(error: any, operation: string): HttpException 
     } else if (status === 404) {
       result = new HttpException('The requested AI resource was not found.', HttpStatus.NOT_FOUND);
     } else if (status === 429) {
-      result = new HttpException('The AI service is busy. Please try again shortly.', HttpStatus.TOO_MANY_REQUESTS);
+      const s = wait ?? 60;
+      result = aiError(429, AI_ERROR_CODES.rateLimited, `You've reached the AI request limit for now. Please wait ${s} seconds and try again.`, s);
+    } else if (upstreamCode === 'AI_PROVIDER_QUOTA_EXHAUSTED') {
+      result = aiError(503, AI_ERROR_CODES.providerQuota, "GleamLearn's AI has reached its usage limit with our AI provider. Please try again later.");
+    } else if (upstreamCode === 'AI_PROVIDER_RATE_LIMITED') {
+      result = aiError(503, AI_ERROR_CODES.providerBusy, 'The AI provider is busy right now. Please try again in a moment.', wait ?? 30);
+    } else if (status === 401 || status === 403 || upstreamCode === 'AI_PROVIDER_AUTH') {
+      // the backend's AI_API_KEY or the AI service's provider key is wrong: an operator problem, not the learner's
+      result = aiError(503, AI_ERROR_CODES.unavailable, 'AI features are temporarily unavailable. Please try again later.');
+    } else if (status === 504 || upstreamCode === 'AI_PROVIDER_TIMEOUT') {
+      result = aiError(504, AI_ERROR_CODES.timeout, 'The AI took too long to respond. Please try again.');
     } else if (status === 413) {
       result = new HttpException('The content is too large to process.', HttpStatus.PAYLOAD_TOO_LARGE);
     } else {
-      // 401/403 (internal key misconfiguration), 422 schema mismatches, and 5xx provider failures
-      // are server-side problems: the user cannot fix them, so they surface as 502.
-      result = new HttpException('AI generation failed. Please try again later.', HttpStatus.BAD_GATEWAY);
+      result = aiError(502, AI_ERROR_CODES.failed, 'AI generation failed. Please try again later.');
     }
   } else if (code === 'ECONNABORTED' || code === 'ETIMEDOUT' || /timeout/i.test(error?.message ?? '')) {
-    result = new HttpException('The AI service took too long to respond. Please try again.', HttpStatus.GATEWAY_TIMEOUT);
+    result = aiError(504, AI_ERROR_CODES.timeout, 'The AI service took too long to respond. Please try again.');
   } else {
-    result = new HttpException('The AI service is currently unavailable. Please try again later.', HttpStatus.SERVICE_UNAVAILABLE);
+    result = aiError(503, AI_ERROR_CODES.unavailable, 'The AI service is currently unavailable. Please try again later.');
   }
 
   logger.warn(
-    `${operation} failed: upstreamStatus=${status ?? 'none'} code=${code ?? 'none'} ` +
+    `${operation} failed: upstreamStatus=${status ?? 'none'} upstreamCode=${upstreamCode ?? 'none'} code=${code ?? 'none'} ` +
       `returned=${result.getStatus()} detail=${describe(detail ?? error?.message)}`,
   );
 

@@ -10,8 +10,8 @@ function allows(options: ReturnType<typeof corsOptionsFromEnv>, origin: string |
 
 describe('corsOptionsFromEnv', () => {
   it('unset or empty keeps the previous behaviour (Nest default: every origin)', () => {
-    expect(corsOptionsFromEnv(undefined)).toEqual({});
-    expect(corsOptionsFromEnv(' , ')).toEqual({});
+    expect(corsOptionsFromEnv(undefined)).toEqual({ exposedHeaders: ['Retry-After'] });
+    expect(corsOptionsFromEnv(' , ')).toEqual({ exposedHeaders: ['Retry-After'] });
   });
 
   it('allows only the listed exact origins (trailing slashes ignored)', () => {

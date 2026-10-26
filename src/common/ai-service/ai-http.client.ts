@@ -1,5 +1,9 @@
 // src/common/ai-service/ai-http.client.ts
 import axios, { AxiosInstance } from 'axios';
+import { currentUserId } from '../request-context.js';
+
+/** Header the AI service uses to rate-limit per learner (it trusts it only on requests carrying AI_API_KEY). */
+export const AI_USER_HEADER = 'X-GleamLearn-User';
 
 // Shared HTTP client for calls from this backend to the Python AI microservice.
 // - Base URL: AI_SERVICE_URL (defaults to a local AI service, never to production)
@@ -31,6 +35,11 @@ export function getAiHttpClient(): AxiosInstance {
       Authorization: `Bearer ${apiKey}`,
       'X-API-Key': apiKey,
     },
+  });
+  cachedClient.interceptors.request.use((config) => {
+    const userId = currentUserId();
+    if (userId) config.headers.set(AI_USER_HEADER, userId);
+    return config;
   });
   cachedSignature = signature;
   return cachedClient;

@@ -17,11 +17,13 @@ export function corsOptionsFromEnv(raw: string | undefined): CorsOptions {
     .split(',')
     .map((o) => o.trim().replace(/\/+$/, ''))
     .filter(Boolean);
-  if (origins.length === 0) return {};
+  // Retry-After is not a CORS-safelisted response header: without this the browser could not read how long to wait
+  if (origins.length === 0) return { exposedHeaders: ['Retry-After'] };
   const allowed = new Set(origins);
   return {
     origin: (origin, callback) => callback(null, !origin || allowed.has(origin)),
     methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     maxAge: 600,
+    exposedHeaders: ['Retry-After'],
   };
 }

@@ -2,8 +2,10 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
-import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { UserAwareThrottlerGuard } from './common/throttling/user-throttler.guard.js';
+import { RequestContextInterceptor } from './common/request-context.js';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { MailModule } from './mail/mail.module.js';
@@ -146,8 +148,9 @@ import { AdminModule } from './admin/admin.module.js';
     AppService,
     {
       provide: APP_GUARD,
-      useClass: ThrottlerGuard, // Applies global rate limiting protection across all controllers
+      useClass: UserAwareThrottlerGuard, // global rate limits, tracked per signed-in account (per IP otherwise)
     },
+    { provide: APP_INTERCEPTOR, useClass: RequestContextInterceptor },
   ],
 })
 export class AppModule {}

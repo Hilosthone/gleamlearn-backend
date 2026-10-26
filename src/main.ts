@@ -4,9 +4,14 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module.js';
 import { createGlobalValidationPipe, isRequestValidationEnabled } from './common/validation/global-validation.pipe.js';
 import { corsOptionsFromEnv } from './common/security/cors.js';
+import { trustProxySetting } from './common/security/trust-proxy.js';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // Behind Render's proxy req.ip is the proxy unless the proxy hop is trusted (rate limits are keyed by it)
+  const trustProxy = trustProxySetting(process.env);
+  if (trustProxy !== false) app.getHttpAdapter().getInstance().set('trust proxy', trustProxy);
 
   // CORS_ORIGINS unset: every origin (unchanged); set it to restrict (see common/security/cors.ts)
   app.enableCors(corsOptionsFromEnv(process.env.CORS_ORIGINS));
