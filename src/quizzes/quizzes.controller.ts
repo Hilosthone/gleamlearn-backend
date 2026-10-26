@@ -287,6 +287,8 @@ import { QuizzesService } from './quizzes.service.js';
 import { CreateQuizDto } from './dto/create-quiz.dto.js';
 import { SubmitQuizDto } from './dto/submit-quiz.dto.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
+import { AdminOnly } from '../admin/auth/admin-only.decorator.js';
+import { AdminPermission } from '../admin/auth/admin-permissions.js';
 
 interface RequestWithUser extends Request {
   user: {
@@ -297,12 +299,12 @@ interface RequestWithUser extends Request {
 
 @ApiTags('Quizzes System')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
 @Controller('api/v1/quizzes')
 export class QuizzesController {
   constructor(private readonly quizzesService: QuizzesService) {}
 
   // --- Quiz Management ---
+  @UseGuards(JwtAuthGuard)
   @Get()
   @ApiOperation({
     summary: 'Retrieve all quizzes',
@@ -311,10 +313,11 @@ export class QuizzesController {
   @ApiResponse({ status: 200, description: 'List of quizzes retrieved successfully.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
   findAll() {
-    return this.quizzesService.findAll();
+    return this.quizzesService.listForLearners();
   }
 
   @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 5, ttl: 60000 } })
+  @AdminOnly(AdminPermission.CONTENT_MANAGE)
   @Post()
   @ApiOperation({
     summary: 'Create a new quiz',
@@ -327,6 +330,7 @@ export class QuizzesController {
   }
 
   // Static routes must be declared before ':id' so they are not captured as an id
+  @UseGuards(JwtAuthGuard)
   @Get('attempts')
   @ApiOperation({
     summary: 'Get user quiz attempts',
@@ -338,6 +342,21 @@ export class QuizzesController {
     return this.quizzesService.getUserAttempts();
   }
 
+  // Admins edit these with POST/PATCH/DELETE but could not read them: the learner routes reject admin tokens and
+  // strip the answer key. These return the stored records unchanged, for admins with content.manage only.
+  @AdminOnly(AdminPermission.CONTENT_MANAGE)
+  @Get('manage/all')
+  manageList() {
+    return this.quizzesService.findAll();
+  }
+
+  @AdminOnly(AdminPermission.CONTENT_MANAGE)
+  @Get('manage/:id')
+  manageOne(@Param('id') id: string) {
+    return this.quizzesService.findOne(id);
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Get(':id')
   @ApiOperation({
     summary: 'Get quiz by ID',
@@ -347,10 +366,11 @@ export class QuizzesController {
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
   @ApiResponse({ status: 404, description: 'Quiz not found.' })
   findOne(@Param('id') id: string) {
-    return this.quizzesService.findOne(id);
+    return this.quizzesService.getForLearner(id);
   }
 
   @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 10, ttl: 60000 } })
+  @AdminOnly(AdminPermission.CONTENT_MANAGE)
   @Patch(':id')
   @ApiOperation({
     summary: 'Update a quiz',
@@ -364,6 +384,7 @@ export class QuizzesController {
   }
 
   @Throttle({ short: { limit: 1, ttl: 5000 }, long: { limit: 5, ttl: 60000 } })
+  @AdminOnly(AdminPermission.CONTENT_MANAGE)
   @Delete(':id')
   @ApiOperation({
     summary: 'Delete a quiz',
@@ -378,6 +399,7 @@ export class QuizzesController {
 
   // --- Quiz Generation Pipelines ---
   @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 10, ttl: 60000 } })
+  @UseGuards(JwtAuthGuard)
   @Post('generate')
   @ApiOperation({
     summary: 'Generate AI quiz',
@@ -390,6 +412,7 @@ export class QuizzesController {
   }
 
   @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 10, ttl: 60000 } })
+  @UseGuards(JwtAuthGuard)
   @Post('generate-from-course')
   @ApiOperation({
     summary: 'Generate quiz from course',
@@ -402,6 +425,7 @@ export class QuizzesController {
   }
 
   @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 10, ttl: 60000 } })
+  @UseGuards(JwtAuthGuard)
   @Post('generate-from-document')
   @ApiOperation({
     summary: 'Generate quiz from document',
@@ -414,6 +438,7 @@ export class QuizzesController {
   }
 
   @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 10, ttl: 60000 } })
+  @UseGuards(JwtAuthGuard)
   @Post('generate-from-topic')
   @ApiOperation({
     summary: 'Generate quiz from topic',
@@ -427,6 +452,7 @@ export class QuizzesController {
 
   // --- Quiz Attempt & Grading ---
   @Throttle({ short: { limit: 1, ttl: 2000 }, long: { limit: 15, ttl: 60000 } })
+  @UseGuards(JwtAuthGuard)
   @Post(':id/start')
   @ApiOperation({
     summary: 'Start a quiz attempt',
@@ -439,6 +465,7 @@ export class QuizzesController {
   }
 
   @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 10, ttl: 60000 } })
+  @UseGuards(JwtAuthGuard)
   @Post(':id/submit')
   @ApiOperation({
     summary: 'Submit a quiz attempt',
@@ -454,6 +481,7 @@ export class QuizzesController {
     return this.quizzesService.submitAttempt(req.user.id, id, submitQuizDto);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get(':id/results')
   @ApiOperation({
     summary: 'Get quiz results',
@@ -465,6 +493,7 @@ export class QuizzesController {
     return this.quizzesService.getResults(id);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get('attempts/:id')
   @ApiOperation({
     summary: 'Get specific quiz attempt details',

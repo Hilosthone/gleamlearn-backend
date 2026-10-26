@@ -130,6 +130,8 @@ import { resolveDocumentPayload } from '../common/storage/document-source.js';
 import { XpService } from '../xp/xp.service.js';
 import { CoinsService } from '../coins/coins.service.js'; // 1. Import CoinsService
 import { gradeQuiz } from './utils/grade-quiz.util.js';
+import { toLearnerAssessment } from '../common/assessment/learner-questions.js';
+import { featureUnavailable } from '../common/errors/feature-unavailable.js';
 
 const QUIZ_PASS_SCORE = 50;
 const QUIZ_XP_REWARD = 50;
@@ -165,6 +167,16 @@ export class QuizzesService {
     const quiz = await this.quizRepository.findOne({ where: { id } });
     if (!quiz) throw new HttpException('Quiz not found', HttpStatus.NOT_FOUND);
     return quiz;
+  }
+
+
+  /** Learner view: questions without their answer keys (see common/assessment/learner-questions.ts). */
+  async listForLearners() {
+    return (await this.findAll()).map((item) => toLearnerAssessment(item));
+  }
+
+  async getForLearner(id: string) {
+    return toLearnerAssessment(await this.findOne(id));
   }
 
   async create(createDto: any) {
@@ -203,15 +215,9 @@ export class QuizzesService {
   }
 
   // --- Attempt & Grading Simulations ---
-  async startAttempt(quizId: string) {
-    await this.findOne(quizId);
-    return {
-      status: 'success',
-      attemptId: `attempt_${Date.now()}`,
-      quizId,
-      startedAt: new Date().toISOString(),
-      message: 'Quiz attempt started.',
-    };
+  /** Attempts are not stored: answers are submitted in one request (POST /quizzes/:id/submit). Was a fake attempt id. */
+  async startAttempt(_quizId: string): Promise<never> {
+    throw featureUnavailable('Quiz attempts', 'answers are submitted directly with POST /quizzes/{id}/submit, and attempts are not stored');
   }
 
   async submitAttempt(userId: string, quizId: string, payload: any) {
@@ -272,15 +278,15 @@ export class QuizzesService {
     };
   }
 
-  async getResults(quizId: string) {
-    return { status: 'success', quizId, resultsSummary: 'Retrieved analysis of quiz attempts.' };
+  async getResults(_quizId: string): Promise<never> {
+    throw featureUnavailable('Quiz results', 'Quiz attempts are not stored yet, so there is no attempt, result or history to return');
   }
 
-  async getUserAttempts() {
-    return { status: 'success', attempts: [], message: 'Retrieved user quiz attempt history.' };
+  async getUserAttempts(): Promise<never> {
+    throw featureUnavailable('Quiz attempt history', 'Quiz attempts are not stored yet, so there is no attempt, result or history to return');
   }
 
-  async getSpecificAttempt(attemptId: string) {
-    return { status: 'success', attemptId, reviewDetails: 'Detailed breakdown of attempt responses.' };
+  async getSpecificAttempt(_attemptId: string): Promise<never> {
+    throw featureUnavailable('Quiz attempt details', 'Quiz attempts are not stored yet, so there is no attempt, result or history to return');
   }
 }

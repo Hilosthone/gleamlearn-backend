@@ -1,20 +1,25 @@
 // src/subscriptions/subscriptions.service.ts
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { prismaModel } from '../common/prisma/prisma-model.js';
 import { featureUnavailable } from '../common/errors/feature-unavailable.js';
 
 @Injectable()
 export class SubscriptionsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private model(name: string) {
+    return prismaModel(this.prisma, name, 'Subscriptions');
+  }
+
   async getPlans() {
-    return this.prisma.subscriptionPlan.findMany({
+    return this.model('subscriptionPlan').findMany({
       where: { isActive: true },
     });
   }
 
   async getCurrentSubscription(userId: string) {
-    const sub = await this.prisma.userSubscription.findFirst({
+    const sub = await this.model('userSubscription').findFirst({
       where: { userId, status: 'ACTIVE' },
       include: { plan: true },
     });
@@ -23,14 +28,14 @@ export class SubscriptionsService {
   }
 
   async cancelSubscription(userId: string) {
-    return this.prisma.userSubscription.updateMany({
+    return this.model('userSubscription').updateMany({
       where: { userId, status: 'ACTIVE' },
       data: { status: 'CANCELLED' },
     });
   }
 
   async getSubscriptionHistory(userId: string) {
-    return this.prisma.userSubscription.findMany({
+    return this.model('userSubscription').findMany({
       where: { userId },
       include: { plan: true },
       orderBy: { createdAt: 'desc' },

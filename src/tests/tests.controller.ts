@@ -226,25 +226,28 @@ import { TestsService } from './tests.service.js';
 import { CreateTestDto } from './dto/create-test.dto.js';
 import { SubmitTestDto } from './dto/submit-test.dto.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
+import { AdminOnly } from '../admin/auth/admin-only.decorator.js';
+import { AdminPermission } from '../admin/auth/admin-permissions.js';
 
 @ApiTags('Tests & Assessments System')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
 @Controller('api/v1/tests')
 export class TestsController {
   constructor(private readonly testsService: TestsService) {}
 
   // --- Test Management ---
+  @UseGuards(JwtAuthGuard)
   @Get()
   @ApiOperation({
     summary: 'Retrieve all tests',
     description: 'Fetch a list of all tests saved and configured in the platform.'
   })
   findAll() {
-    return this.testsService.findAll();
+    return this.testsService.listForLearners();
   }
 
   @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 5, ttl: 60000 } })
+  @AdminOnly(AdminPermission.CONTENT_MANAGE)
   @Post()
   @ApiOperation({
     summary: 'Create a new test',
@@ -255,6 +258,7 @@ export class TestsController {
   }
 
   // Static routes must be declared before ':id' so they are not captured as an id
+  @UseGuards(JwtAuthGuard)
   @Get('attempts')
   @ApiOperation({
     summary: 'Get user test attempts',
@@ -264,16 +268,32 @@ export class TestsController {
     return this.testsService.getUserAttempts();
   }
 
+  // Admins edit these with POST/PATCH/DELETE but could not read them: the learner routes reject admin tokens and
+  // strip the answer key. These return the stored records unchanged, for admins with content.manage only.
+  @AdminOnly(AdminPermission.CONTENT_MANAGE)
+  @Get('manage/all')
+  manageList() {
+    return this.testsService.findAll();
+  }
+
+  @AdminOnly(AdminPermission.CONTENT_MANAGE)
+  @Get('manage/:id')
+  manageOne(@Param('id') id: string) {
+    return this.testsService.findOne(id);
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Get(':id')
   @ApiOperation({
     summary: 'Get test by ID',
     description: 'Fetch detailed data and questions for a specific test using its unique identifier.'
   })
   findOne(@Param('id') id: string) {
-    return this.testsService.findOne(id);
+    return this.testsService.getForLearner(id);
   }
 
   @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 10, ttl: 60000 } })
+  @AdminOnly(AdminPermission.CONTENT_MANAGE)
   @Patch(':id')
   @ApiOperation({
     summary: 'Update a test',
@@ -284,6 +304,7 @@ export class TestsController {
   }
 
   @Throttle({ short: { limit: 1, ttl: 5000 }, long: { limit: 5, ttl: 60000 } })
+  @AdminOnly(AdminPermission.CONTENT_MANAGE)
   @Delete(':id')
   @ApiOperation({
     summary: 'Delete a test',
@@ -295,6 +316,7 @@ export class TestsController {
 
   // --- Test Generation ---
   @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 10, ttl: 60000 } })
+  @UseGuards(JwtAuthGuard)
   @Post('generate')
   @ApiOperation({
     summary: 'Generate AI test',
@@ -305,6 +327,7 @@ export class TestsController {
   }
 
   @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 10, ttl: 60000 } })
+  @UseGuards(JwtAuthGuard)
   @Post('generate-from-course')
   @ApiOperation({
     summary: 'Generate test from course',
@@ -315,6 +338,7 @@ export class TestsController {
   }
 
   @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 10, ttl: 60000 } })
+  @UseGuards(JwtAuthGuard)
   @Post('generate-from-document')
   @ApiOperation({
     summary: 'Generate test from document',
@@ -326,6 +350,7 @@ export class TestsController {
 
   // --- Attempts & Grading ---
   @Throttle({ short: { limit: 1, ttl: 2000 }, long: { limit: 15, ttl: 60000 } })
+  @UseGuards(JwtAuthGuard)
   @Post(':id/start')
   @ApiOperation({
     summary: 'Start a test attempt',
@@ -336,6 +361,7 @@ export class TestsController {
   }
 
   @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 10, ttl: 60000 } })
+  @UseGuards(JwtAuthGuard)
   @Post(':id/submit')
   @ApiOperation({
     summary: 'Submit a test attempt',
@@ -345,6 +371,7 @@ export class TestsController {
     return this.testsService.submitAttempt(id, submitDto);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get(':id/results')
   @ApiOperation({
     summary: 'Get test results',
@@ -354,6 +381,7 @@ export class TestsController {
     return this.testsService.getResults(id);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get('attempts/:id')
   @ApiOperation({
     summary: 'Get specific test attempt details',

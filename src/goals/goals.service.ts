@@ -49,7 +49,7 @@ export class GoalsService {
 
   async update(userId: string, id: string, dto: UpdateStudyGoalDto) {
     const goalRecord = await this.findOne(userId, id);
-    Object.assign(goalRecord.goal, dto);
+    Object.assign(goalRecord.goal, stripProtectedFields(dto)); // `id`/`userId` in the body must not retarget the save
     const updated = await this.goalsRepo.save(goalRecord.goal);
     return {
       status: 'success',

@@ -1,5 +1,5 @@
 // src/planner/dto/study-planner.dto.ts
-import { IsNotEmpty, IsOptional, IsString, IsDateString, IsArray } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, IsDateString, IsArray, IsIn, Matches, MaxLength } from 'class-validator';
 import { ApiProperty, PartialType } from '@nestjs/swagger';
 
 export class GeneratePlannerDto {
@@ -17,6 +17,43 @@ export class GeneratePlannerDto {
   @IsString()
   @IsOptional()
   intensity?: string;
+}
+
+export const PLANNER_ACTIVITY_TYPES = ['study', 'quiz_practice', 'revision', 'exam_prep'] as const;
+
+/** One session the learner adds to their own plan. */
+export class CreatePlannerItemDto {
+  @ApiProperty({ example: 'Revise cell biology' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(255)
+  title: string;
+
+  @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  @MaxLength(2000)
+  description?: string;
+
+  @ApiProperty({ example: '2026-11-02' })
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'scheduledDate must be YYYY-MM-DD' })
+  @IsDateString()
+  scheduledDate: string;
+
+  @ApiProperty({ example: '09:00', required: false })
+  @IsOptional()
+  @Matches(/^([01]\d|2[0-3]):[0-5]\d$/, { message: 'startTime must be HH:MM (24-hour)' })
+  startTime?: string;
+
+  @ApiProperty({ example: '10:30', required: false })
+  @IsOptional()
+  @Matches(/^([01]\d|2[0-3]):[0-5]\d$/, { message: 'endTime must be HH:MM (24-hour)' })
+  endTime?: string;
+
+  @ApiProperty({ enum: PLANNER_ACTIVITY_TYPES, required: false })
+  @IsOptional()
+  @IsIn(PLANNER_ACTIVITY_TYPES)
+  activityType?: string;
 }
 
 export class UpdatePlannerItemDto {

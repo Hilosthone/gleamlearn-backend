@@ -10,6 +10,9 @@ import { FilesService } from '../files/files.service.js';
 import { resolveDocumentPayload } from '../common/storage/document-source.js';
 import { CreateTestDto } from './dto/create-test.dto.js';
 import { SubmitTestDto } from './dto/submit-test.dto.js';
+import { toLearnerAssessment } from '../common/assessment/learner-questions.js';
+import { featureUnavailable } from '../common/errors/feature-unavailable.js';
+import { gradeQuiz } from '../quizzes/utils/grade-quiz.util.js';
 
 @Injectable()
 export class TestsService {
@@ -46,6 +49,16 @@ export class TestsService {
     return test;
   }
 
+
+  /** Learner view: questions without their answer keys (see common/assessment/learner-questions.ts). */
+  async listForLearners() {
+    return (await this.findAll()).map((item) => toLearnerAssessment(item));
+  }
+
+  async getForLearner(id: string) {
+    return toLearnerAssessment(await this.findOne(id));
+  }
+
   async create(createDto: CreateTestDto): Promise<Test> {
     const test = this.testRepository.create(createDto);
     return await this.testRepository.save(test);
@@ -79,39 +92,42 @@ export class TestsService {
   }
 
   // --- Attempt & Grading Logic ---
-  async startAttempt(testId: string) {
-    await this.findOne(testId);
-    return {
-      status: 'success',
-      attemptId: `test_attempt_${Date.now()}`,
-      testId,
-      startedAt: new Date().toISOString(),
-      message: 'Test attempt session initialized.',
-    };
+  /** Attempts are not stored: answers are submitted in one request. Was a fake attempt id. */
+  async startAttempt(_id: string): Promise<never> {
+    throw featureUnavailable('Test attempts', 'answers are submitted directly with POST /tests/{id}/submit, and attempts are not stored');
   }
 
-  async submitAttempt(testId: string, submitDto: SubmitTestDto) {
-    await this.findOne(testId);
+  /**
+   * Grades the submitted answers against the stored answer key (same grader as quizzes). It used to return a fixed
+   * score (88.5) whatever was submitted. No XP or coins are awarded for tests, and nothing is stored.
+   */
+  async submitAttempt(id: string, submitDto: SubmitTestDto) {
+    const test = await this.findOne(id);
+    const result = gradeQuiz(test.questions, submitDto?.answers);
     return {
       status: 'success',
-      testId,
-      score: 88.5,
-      totalQuestions: 25,
+      testId: id,
+      score: result.score,
+      totalQuestions: result.totalQuestions,
+      gradableQuestions: result.gradableQuestions,
+      correctAnswers: result.correctAnswers,
+      graded: result.graded,
       gradedAt: new Date().toISOString(),
-      message: 'Test submitted and graded successfully.',
+      message: result.graded
+        ? 'Test submitted and graded. The result is not saved.'
+        : 'Test submitted, but it has no answer key to grade against.',
     };
   }
 
-  async getResults(testId: string) {
-    await this.findOne(testId);
-    return { status: 'success', testId, summary: 'Comprehensive analysis of test performance.' };
+  async getResults(_id: string): Promise<never> {
+    throw featureUnavailable('Test results', 'Test attempts are not stored yet, so there is no attempt, result or history to return');
   }
 
-  async getUserAttempts() {
-    return { status: 'success', attempts: [], message: 'Retrieved student test attempt logs.' };
+  async getUserAttempts(): Promise<never> {
+    throw featureUnavailable('Test attempt history', 'Test attempts are not stored yet, so there is no attempt, result or history to return');
   }
 
-  async getSpecificAttempt(attemptId: string) {
-    return { status: 'success', attemptId, details: 'Detailed itemized review of test submission.' };
+  async getSpecificAttempt(_attemptId: string): Promise<never> {
+    throw featureUnavailable('Test attempt details', 'Test attempts are not stored yet, so there is no attempt, result or history to return');
   }
 }

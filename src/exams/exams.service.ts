@@ -10,6 +10,9 @@ import { FilesService } from '../files/files.service.js';
 import { resolveDocumentPayload } from '../common/storage/document-source.js';
 import { CreateExamDto } from './dto/create-exam.dto.js';
 import { SubmitExamDto } from './dto/submit-exam.dto.js';
+import { toLearnerAssessment } from '../common/assessment/learner-questions.js';
+import { featureUnavailable } from '../common/errors/feature-unavailable.js';
+import { gradeQuiz } from '../quizzes/utils/grade-quiz.util.js';
 
 @Injectable()
 export class ExamsService {
@@ -40,6 +43,16 @@ export class ExamsService {
     const exam = await this.examRepository.findOne({ where: { id } });
     if (!exam) throw new HttpException('Examination not found', HttpStatus.NOT_FOUND);
     return exam;
+  }
+
+
+  /** Learner view: questions without their answer keys (see common/assessment/learner-questions.ts). */
+  async listForLearners() {
+    return (await this.findAll()).map((item) => toLearnerAssessment(item));
+  }
+
+  async getForLearner(id: string) {
+    return toLearnerAssessment(await this.findOne(id));
   }
 
   async create(createDto: CreateExamDto): Promise<Exam> {
@@ -75,59 +88,52 @@ export class ExamsService {
   }
 
   // --- Attempts, Grading & Simulation ---
-  async startAttempt(id: string) {
-    await this.findOne(id);
-    return {
-      status: 'success',
-      attemptId: `exam_attempt_${Date.now()}`,
-      examId: id,
-      startedAt: new Date().toISOString(),
-      message: 'Official examination session started under proctored guidelines.',
-    };
+  /** Attempts are not stored: answers are submitted in one request. Was a fake attempt id. */
+  async startAttempt(_id: string): Promise<never> {
+    throw featureUnavailable('Exam attempts', 'answers are submitted directly with POST /exams/{id}/submit, and attempts are not stored');
   }
 
+  /**
+   * Grades the submitted answers against the stored answer key (same grader as quizzes). It used to return a fixed
+   * score (92, grade A) whatever was submitted. No XP or coins are awarded for exams, and nothing is stored.
+   */
   async submitAttempt(id: string, submitDto: SubmitExamDto) {
-    await this.findOne(id);
+    const exam = await this.findOne(id);
+    const result = gradeQuiz(exam.questions, submitDto?.answers);
     return {
       status: 'success',
       examId: id,
-      score: 92.0,
-      grade: 'A',
-      submittedAt: new Date().toISOString(),
-      message: 'Exam submitted successfully and queued for final evaluation.',
+      score: result.score,
+      totalQuestions: result.totalQuestions,
+      gradableQuestions: result.gradableQuestions,
+      correctAnswers: result.correctAnswers,
+      graded: result.graded,
+      gradedAt: new Date().toISOString(),
+      message: result.graded
+        ? 'Exam submitted and graded. The result is not saved.'
+        : 'Exam submitted, but it has no answer key to grade against.',
     };
   }
 
-  async getResult(id: string) {
-    await this.findOne(id);
-    return { status: 'success', examId: id, analysis: 'Comprehensive breakdown of exam results and topic mastery.' };
+  async getResult(_id: string): Promise<never> {
+    throw featureUnavailable('Exam results', 'Exam attempts are not stored yet, so there is no attempt, result or history to return');
   }
 
-  async getHistory() {
-    return { status: 'success', history: [], message: 'Retrieved student exam attempt history.' };
+  async getHistory(): Promise<never> {
+    throw featureUnavailable('Exam attempt history', 'Exam attempts are not stored yet, so there is no attempt, result or history to return');
   }
 
-  async getSpecificAttempt(attemptId: string) {
-    return { status: 'success', attemptId, details: 'Detailed review log of specific exam attempt.' };
+  async getSpecificAttempt(_attemptId: string): Promise<never> {
+    throw featureUnavailable('Exam attempt details', 'Exam attempts are not stored yet, so there is no attempt, result or history to return');
   }
 
-  async simulateExam(id: string) {
-    await this.findOne(id);
-    return {
-      status: 'success',
-      examId: id,
-      simulationActive: true,
-      message: 'AI exam simulation environment initialized.',
-    };
+  /** Was a fake "simulation active" response. */
+  async simulateExam(_id: string): Promise<never> {
+    throw featureUnavailable('Exam simulation', 'timed exam simulation is not implemented');
   }
 
-  async getReadiness(id: string) {
-    await this.findOne(id);
-    return {
-      status: 'success',
-      examId: id,
-      readinessScore: '85%',
-      recommendation: 'Student is well-prepared for official examination.',
-    };
+  /** Was an invented "85%" readiness score with a fixed recommendation. */
+  async getReadiness(_id: string): Promise<never> {
+    throw featureUnavailable('Exam readiness', 'readiness is not computed yet (there are no stored attempts to base it on)');
   }
 }

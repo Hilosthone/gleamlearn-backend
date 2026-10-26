@@ -2,6 +2,7 @@ import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard.js';
+import { AdminJwtAuthGuard } from '../../admin/auth/guards/admin-jwt.guard.js';
 import { QuizzesController } from '../../quizzes/quizzes.controller.js';
 import { QuizzesService } from '../../quizzes/quizzes.service.js';
 import { TestsController } from '../../tests/tests.controller.js';
@@ -12,9 +13,9 @@ import { ExamsService } from '../../exams/exams.service.js';
 // Verifies that static GET routes are reachable and not captured by GET /:id
 describe('static routes declared before :id', () => {
   let app: INestApplication;
-  const quizzes = { getUserAttempts: vi.fn(() => ({ route: 'quiz-attempts' })), findOne: vi.fn(() => ({ route: 'quiz-by-id' })) };
-  const tests = { getUserAttempts: vi.fn(() => ({ route: 'test-attempts' })), findOne: vi.fn(() => ({ route: 'test-by-id' })) };
-  const exams = { getHistory: vi.fn(() => ({ route: 'exam-history' })), findOne: vi.fn(() => ({ route: 'exam-by-id' })) };
+  const quizzes = { getUserAttempts: vi.fn(() => ({ route: 'quiz-attempts' })), getForLearner: vi.fn(() => ({ route: 'quiz-by-id' })), findAll: vi.fn(() => ({ route: 'quiz-manage-all' })), findOne: vi.fn(() => ({ route: 'quiz-manage-one' })) };
+  const tests = { getUserAttempts: vi.fn(() => ({ route: 'test-attempts' })), getForLearner: vi.fn(() => ({ route: 'test-by-id' })), findAll: vi.fn(() => ({ route: 'test-manage-all' })), findOne: vi.fn(() => ({ route: 'test-manage-one' })) };
+  const exams = { getHistory: vi.fn(() => ({ route: 'exam-history' })), getForLearner: vi.fn(() => ({ route: 'exam-by-id' })), findAll: vi.fn(() => ({ route: 'exam-manage-all' })), findOne: vi.fn(() => ({ route: 'exam-manage-one' })) };
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
@@ -27,6 +28,8 @@ describe('static routes declared before :id', () => {
     })
       .overrideGuard(JwtAuthGuard)
       .useValue({ canActivate: () => true })
+      .overrideGuard(AdminJwtAuthGuard)
+      .useValue({ canActivate: () => true })
       .compile();
     app = moduleRef.createNestApplication();
     await app.init();
@@ -38,6 +41,10 @@ describe('static routes declared before :id', () => {
     ['/api/v1/quizzes/attempts', 'quiz-attempts'],
     ['/api/v1/tests/attempts', 'test-attempts'],
     ['/api/v1/exams/history', 'exam-history'],
+    ['/api/v1/quizzes/manage/all', 'quiz-manage-all'],
+    ['/api/v1/tests/manage/all', 'test-manage-all'],
+    ['/api/v1/exams/manage/all', 'exam-manage-all'],
+    ['/api/v1/quizzes/manage/7c9e6679-7425-40de-944b-e07fc1f90ae7', 'quiz-manage-one'],
   ])('GET %s reaches its own handler', async (path, route) => {
     const res = await request(app.getHttpServer()).get(path);
     expect(res.status).toBe(200);
@@ -48,14 +55,15 @@ describe('static routes declared before :id', () => {
     ['/api/v1/quizzes/7c9e6679-7425-40de-944b-e07fc1f90ae7', 'quiz-by-id'],
     ['/api/v1/tests/7c9e6679-7425-40de-944b-e07fc1f90ae7', 'test-by-id'],
     ['/api/v1/exams/7c9e6679-7425-40de-944b-e07fc1f90ae7', 'exam-by-id'],
-  ])('GET %s still reaches findOne', async (path, route) => {
+  ])('GET %s still reaches the by-id handler', async (path, route) => {
     const res = await request(app.getHttpServer()).get(path);
     expect(res.body.route).toBe(route);
   });
 
   it('never passes the static segment to findOne', () => {
-    expect(quizzes.findOne).not.toHaveBeenCalledWith('attempts');
-    expect(tests.findOne).not.toHaveBeenCalledWith('attempts');
-    expect(exams.findOne).not.toHaveBeenCalledWith('history');
+    expect(quizzes.getForLearner).not.toHaveBeenCalledWith('attempts');
+    expect(tests.getForLearner).not.toHaveBeenCalledWith('attempts');
+    expect(exams.getForLearner).not.toHaveBeenCalledWith('history');
+    expect(quizzes.getForLearner).not.toHaveBeenCalledWith('manage');
   });
 });

@@ -121,17 +121,22 @@
 // src/calendar/calendar.service.ts
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { prismaModel } from '../common/prisma/prisma-model.js';
 import { CreateCalendarEventDto, UpdateCalendarEventDto } from './dto/calendar.dto.js';
 
 @Injectable()
 export class CalendarService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private model(name: string) {
+    return prismaModel(this.prisma, name, 'Calendar');
+  }
+
   /**
    * Fetches all calendar events belonging to a specific user, sorted by start time.
    */
   async getAllEvents(userId: string) {
-    return this.prisma.calendarEvent.findMany({
+    return this.model('calendarEvent').findMany({
       where: { userId },
       orderBy: { startTime: 'asc' },
     });
@@ -145,7 +150,7 @@ export class CalendarService {
     const startDate = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0));
     const endDate = new Date(Date.UTC(year, month, 1, 0, 0, 0)); // 1st day of next month
 
-    return this.prisma.calendarEvent.findMany({
+    return this.model('calendarEvent').findMany({
       where: {
         userId,
         startTime: {
@@ -165,7 +170,7 @@ export class CalendarService {
     const end = new Date(start);
     end.setDate(end.getDate() + 7); // 7-day window
 
-    return this.prisma.calendarEvent.findMany({
+    return this.model('calendarEvent').findMany({
       where: {
         userId,
         startTime: {
@@ -184,7 +189,7 @@ export class CalendarService {
     const start = new Date(`${dateStr}T00:00:00.000Z`);
     const end = new Date(`${dateStr}T23:59:59.999Z`);
 
-    return this.prisma.calendarEvent.findMany({
+    return this.model('calendarEvent').findMany({
       where: {
         userId,
         startTime: {
@@ -200,7 +205,7 @@ export class CalendarService {
    * Creates a new calendar event linked to the authorized user.
    */
   async createEvent(userId: string, dto: CreateCalendarEventDto) {
-    return this.prisma.calendarEvent.create({
+    return this.model('calendarEvent').create({
       data: {
         userId,
         title: dto.title,
@@ -217,7 +222,7 @@ export class CalendarService {
    */
   async updateEvent(userId: string, id: string, dto: UpdateCalendarEventDto) {
     // Verify the event belongs to the user before updating (Multi-tenant security check)
-    const existing = await this.prisma.calendarEvent.findFirst({
+    const existing = await this.model('calendarEvent').findFirst({
       where: { id, userId },
     });
 
@@ -225,7 +230,7 @@ export class CalendarService {
       throw new NotFoundException(`Calendar event with ID ${id} not found.`);
     }
 
-    return this.prisma.calendarEvent.update({
+    return this.model('calendarEvent').update({
       where: { id },
       data: {
         ...(dto.title && { title: dto.title }),
@@ -242,7 +247,7 @@ export class CalendarService {
    */
   async deleteEvent(userId: string, id: string) {
     // Verify ownership before deleting
-    const existing = await this.prisma.calendarEvent.findFirst({
+    const existing = await this.model('calendarEvent').findFirst({
       where: { id, userId },
     });
 
@@ -250,7 +255,7 @@ export class CalendarService {
       throw new NotFoundException(`Calendar event with ID ${id} not found.`);
     }
 
-    await this.prisma.calendarEvent.delete({
+    await this.model('calendarEvent').delete({
       where: { id },
     });
 

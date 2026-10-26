@@ -3,7 +3,8 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, MoreThanOrEqual, LessThanOrEqual, Between } from 'typeorm';
 import { StudyPlanItem } from './entities/study-plan-item.entity.js';
-import { GeneratePlannerDto, UpdatePlannerItemDto } from './dto/study-planner.dto.js';
+import { CreatePlannerItemDto, GeneratePlannerDto, UpdatePlannerItemDto } from './dto/study-planner.dto.js';
+import { featureUnavailable } from '../common/errors/feature-unavailable.js';
 import { stripProtectedFields } from '../common/utils/strip-protected.js';
 
 @Injectable()
@@ -13,39 +14,26 @@ export class PlannerService {
     private plannerRepo: Repository<StudyPlanItem>,
   ) {}
 
-  async generatePlanner(userId: string, dto: GeneratePlannerDto) {
-    // Clear any existing active pending plan items or generate fresh blocks
-    // Simulating AI schedule generation algorithm splitting topics across days leading up to the deadline
-    const sampleItems = [
-      {
-        userId,
-        title: 'Module Review & Core Concepts',
-        description: `AI-generated study session based on target ${dto.targetId}`,
-        scheduledDate: new Date().toISOString().split('T')[0],
-        startTime: '09:00 AM',
-        endTime: '11:00 AM',
-        activityType: 'study',
-      },
-      {
-        userId,
-        title: 'Practice Quiz & Knowledge Check',
-        description: 'Test retention on newly covered topics',
-        scheduledDate: new Date(Date.now() + 86400000).toISOString().split('T')[0], // Tomorrow
-        startTime: '02:00 PM',
-        endTime: '03:30 PM',
-        activityType: 'quiz_practice',
-      },
-    ];
+  async createItem(userId: string, dto: CreatePlannerItemDto) {
+    const item = this.plannerRepo.create({
+      userId,
+      title: dto.title.trim(),
+      description: dto.description?.trim() || undefined,
+      scheduledDate: dto.scheduledDate,
+      startTime: dto.startTime,
+      endTime: dto.endTime,
+      activityType: dto.activityType ?? 'study',
+    });
+    const saved = await this.plannerRepo.save(item);
+    return { status: 'success', item: saved };
+  }
 
-    const createdItems = this.plannerRepo.create(sampleItems);
-    const saved = await this.plannerRepo.save(createdItems);
-
-    return {
-      status: 'success',
-      message: 'AI study plan generated successfully.',
-      totalSessions: saved.length,
-      schedule: saved,
-    };
+  /*
+   * This used to save two fixed sample sessions ("Module Review & Core Concepts", "Practice Quiz & Knowledge Check")
+   * and call them an AI-generated plan; the target and deadline were never used. It now answers 501 and stores nothing.
+   */
+  async generatePlanner(_userId: string, _dto: GeneratePlannerDto): Promise<never> {
+    throw featureUnavailable('AI study plan generation', 'plans are not generated from your courses and deadlines yet; add sessions yourself');
   }
 
   async getAllPlannerItems(userId: string) {

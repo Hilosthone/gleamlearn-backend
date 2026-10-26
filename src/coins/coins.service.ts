@@ -36,9 +36,12 @@ export class CoinsService {
       throw new HttpException('Coin reward amount must be greater than zero', HttpStatus.BAD_REQUEST);
     }
 
+    // `type` is NOT NULL in coin_transactions (the admin finance entity on the same table declares it required);
+    // without it every reward failed with a database error after the XP had already been awarded.
     const transaction = this.coinRepo.create({
       userId,
       amount, // Positive value
+      type: 'EARN',
       source,
       description,
     });
@@ -61,6 +64,7 @@ export class CoinsService {
     const transaction = this.coinRepo.create({
       userId,
       amount: -Math.abs(amount), // Negative value for deduction
+      type: 'SPEND',
       source,
       description,
     });

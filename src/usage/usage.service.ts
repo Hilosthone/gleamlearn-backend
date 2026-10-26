@@ -1,13 +1,18 @@
 // src/usage/usage.service.ts
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { prismaModel } from '../common/prisma/prisma-model.js';
 
 @Injectable()
 export class UsageService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private model(name: string) {
+    return prismaModel(this.prisma, name, 'Usage limits');
+  }
+
   private async getUserTier(userId: string) {
-    const activeSub = await this.prisma.userSubscription.findFirst({
+    const activeSub = await this.model('userSubscription').findFirst({
       where: { userId, status: 'ACTIVE' },
       include: { plan: true },
     });
@@ -38,7 +43,7 @@ export class UsageService {
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
 
-    const used = await this.prisma.aiUsageLog.count({
+    const used = await this.model('aiUsageLog').count({
       where: {
         userId,
         createdAt: { gte: startOfDay },
@@ -56,7 +61,7 @@ export class UsageService {
   async getDocumentUsage(userId: string) {
     const tier = await this.getUserTier(userId);
     const limit = tier === 'PREMIUM' ? 50 : 5;
-    const used = await this.prisma.studyMaterial.count({ where: { userId } });
+    const used = await this.model('studyMaterial').count({ where: { userId } });
 
     return {
       limit,
@@ -72,7 +77,7 @@ export class UsageService {
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
 
-    const used = await this.prisma.quizAttempt.count({
+    const used = await this.model('quizAttempt').count({
       where: {
         userId,
         createdAt: { gte: startOfDay },

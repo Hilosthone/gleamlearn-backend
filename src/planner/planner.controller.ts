@@ -103,7 +103,7 @@ import { Controller, Get, Post, Patch, Param, Body, Request, UseGuards } from '@
 import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { PlannerService } from './planner.service.js';
-import { GeneratePlannerDto, UpdatePlannerItemDto } from './dto/study-planner.dto.js';
+import { CreatePlannerItemDto, GeneratePlannerDto, UpdatePlannerItemDto } from './dto/study-planner.dto.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 
 @ApiTags('AI Study Planner')
@@ -112,6 +112,13 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 @Controller('api/v1/planner')
 export class PlannerController {
   constructor(private readonly plannerService: PlannerService) {}
+
+  @Throttle({ short: { limit: 1, ttl: 2000 }, long: { limit: 20, ttl: 60000 } })
+  @Post()
+  @ApiOperation({ summary: 'Add a session to your study plan' })
+  create(@Request() req: any, @Body() dto: CreatePlannerItemDto) {
+    return this.plannerService.createItem(req.user.userId, dto);
+  }
 
   @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 10, ttl: 60000 } })
   @Post('generate')

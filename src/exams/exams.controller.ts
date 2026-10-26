@@ -196,23 +196,26 @@ import { ExamsService } from './exams.service.js';
 import { CreateExamDto } from './dto/create-exam.dto.js';
 import { SubmitExamDto } from './dto/submit-exam.dto.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
+import { AdminOnly } from '../admin/auth/admin-only.decorator.js';
+import { AdminPermission } from '../admin/auth/admin-permissions.js';
 
 @ApiTags('Examinations System')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
 @Controller('api/v1/exams')
 export class ExamsController {
   constructor(private readonly examsService: ExamsService) {}
 
   // --- Management ---
+  @UseGuards(JwtAuthGuard)
   @Get()
   @ApiOperation({
     summary: 'Retrieve all examinations',
     description: 'Fetch a list of all formal examinations and timed assessments saved in the system.'
   })
-  findAll() { return this.examsService.findAll(); }
+  findAll() { return this.examsService.listForLearners(); }
 
   @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 5, ttl: 60000 } })
+  @AdminOnly(AdminPermission.CONTENT_MANAGE)
   @Post()
   @ApiOperation({
     summary: 'Create a new examination',
@@ -221,6 +224,7 @@ export class ExamsController {
   create(@Body() dto: CreateExamDto) { return this.examsService.create(dto); }
 
   // Static routes must be declared before ':id' so they are not captured as an id
+  @UseGuards(JwtAuthGuard)
   @Get('history')
   @ApiOperation({
     summary: 'Get student exam history',
@@ -228,14 +232,30 @@ export class ExamsController {
   })
   getHistory() { return this.examsService.getHistory(); }
 
+  // Admins edit these with POST/PATCH/DELETE but could not read them: the learner routes reject admin tokens and
+  // strip the answer key. These return the stored records unchanged, for admins with content.manage only.
+  @AdminOnly(AdminPermission.CONTENT_MANAGE)
+  @Get('manage/all')
+  manageList() {
+    return this.examsService.findAll();
+  }
+
+  @AdminOnly(AdminPermission.CONTENT_MANAGE)
+  @Get('manage/:id')
+  manageOne(@Param('id') id: string) {
+    return this.examsService.findOne(id);
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Get(':id')
   @ApiOperation({
     summary: 'Get examination by ID',
     description: 'Fetch detailed data for a specific formal examination using its unique identifier.'
   })
-  findOne(@Param('id') id: string) { return this.examsService.findOne(id); }
+  findOne(@Param('id') id: string) { return this.examsService.getForLearner(id); }
 
   @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 10, ttl: 60000 } })
+  @AdminOnly(AdminPermission.CONTENT_MANAGE)
   @Patch(':id')
   @ApiOperation({
     summary: 'Update an examination',
@@ -244,6 +264,7 @@ export class ExamsController {
   update(@Param('id') id: string, @Body() dto: CreateExamDto) { return this.examsService.update(id, dto); }
 
   @Throttle({ short: { limit: 1, ttl: 5000 }, long: { limit: 5, ttl: 60000 } })
+  @AdminOnly(AdminPermission.CONTENT_MANAGE)
   @Delete(':id')
   @ApiOperation({
     summary: 'Delete an examination',
@@ -253,6 +274,7 @@ export class ExamsController {
 
   // --- Generation ---
   @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 10, ttl: 60000 } })
+  @UseGuards(JwtAuthGuard)
   @Post('generate')
   @ApiOperation({
     summary: 'Generate AI examination',
@@ -261,6 +283,7 @@ export class ExamsController {
   generate(@Body() body: any) { return this.examsService.generateExam(body); }
 
   @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 10, ttl: 60000 } })
+  @UseGuards(JwtAuthGuard)
   @Post('generate-from-course')
   @ApiOperation({
     summary: 'Generate exam from course',
@@ -269,6 +292,7 @@ export class ExamsController {
   generateFromCourse(@Body() body: any) { return this.examsService.generateFromCourse(body); }
 
   @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 10, ttl: 60000 } })
+  @UseGuards(JwtAuthGuard)
   @Post('generate-from-document')
   @ApiOperation({
     summary: 'Generate exam from document',
@@ -278,6 +302,7 @@ export class ExamsController {
 
   // --- Attempts & Grading ---
   @Throttle({ short: { limit: 1, ttl: 2000 }, long: { limit: 15, ttl: 60000 } })
+  @UseGuards(JwtAuthGuard)
   @Post(':id/start')
   @ApiOperation({
     summary: 'Start an exam attempt',
@@ -286,6 +311,7 @@ export class ExamsController {
   startAttempt(@Param('id') id: string) { return this.examsService.startAttempt(id); }
 
   @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 10, ttl: 60000 } })
+  @UseGuards(JwtAuthGuard)
   @Post(':id/submit')
   @ApiOperation({
     summary: 'Submit an exam attempt',
@@ -293,6 +319,7 @@ export class ExamsController {
   })
   submitAttempt(@Param('id') id: string, @Body() dto: SubmitExamDto) { return this.examsService.submitAttempt(id, dto); }
 
+  @UseGuards(JwtAuthGuard)
   @Get(':id/result')
   @ApiOperation({
     summary: 'Get exam result',
@@ -300,6 +327,7 @@ export class ExamsController {
   })
   getResult(@Param('id') id: string) { return this.examsService.getResult(id); }
 
+  @UseGuards(JwtAuthGuard)
   @Get('attempts/:id')
   @ApiOperation({
     summary: 'Get specific exam attempt details',
@@ -309,6 +337,7 @@ export class ExamsController {
 
   // --- Simulation & Readiness ---
   @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 10, ttl: 60000 } })
+  @UseGuards(JwtAuthGuard)
   @Post(':id/simulate')
   @ApiOperation({
     summary: 'Simulate an examination',
@@ -316,6 +345,7 @@ export class ExamsController {
   })
   simulateExam(@Param('id') id: string) { return this.examsService.simulateExam(id); }
 
+  @UseGuards(JwtAuthGuard)
   @Get(':id/readiness')
   @ApiOperation({
     summary: 'Get exam readiness score',
