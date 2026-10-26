@@ -124,6 +124,7 @@
 
 
 // src/lessons/lessons.controller.ts
+import { CountsTowardStreak } from '../streak/streak-activity.js';
 import { Controller, Get, Post, Patch, Delete, Param, Body, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
@@ -206,6 +207,7 @@ export class LessonsController {
 
   @Throttle({ short: { limit: 1, ttl: 2000 }, long: { limit: 20, ttl: 60000 } })
   @UseGuards(JwtAuthGuard)
+  @CountsTowardStreak('lesson_completed')
   @Post('lessons/:id/complete')
   @ApiOperation({ summary: 'Mark a lesson as completed' })
   @ApiResponse({ status: 201, description: 'Lesson marked as completed successfully.' })

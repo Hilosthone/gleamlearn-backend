@@ -74,3 +74,20 @@ Status as of **2026-10-25** (the P0 below was resolved on 2026-10-24: `public.us
 - `POST /payments/webhook` is a no-op without signature verification.
 - `PATCH /users/me/notification-preferences` and `/privacy-settings` echo the body without saving it.
 - Credentials exposed in git history and to be rotated by the owner: `AI_API_KEY` (AI service), `ALOC_API_KEY` (backend).
+
+## Fixed in Batch 30 (2026-10-26, frontend integration)
+
+- **Prisma models that don't exist returned 500:** calendar, reports and feedback, subscription plans, status and history, and usage now answer **501 FEATURE_UNAVAILABLE** (`src/common/prisma/prisma-model.ts`). Their tables are a schema change (approval).
+- **`POST /planner/generate` stored two fixed sample sessions as an "AI study plan".** It now answers 501. `POST /planner` adds a learner's own session (validated, owner-scoped).
+- **Goal updates accepted `id`/`userId` from the body**, which could overwrite or move another learner's goal. These are now stripped.
+- **Admins could edit quizzes, tests and exams but not read them:** the learner reads reject admin tokens and strip the answer key. Added admin-only `GET /{quizzes|tests|exams}/manage/all` and `/manage/:id` (`content.manage`).
+- **Every coin award failed** with a NOT NULL violation on `coin_transactions.type`. The type is now `EARN` or `SPEND`.
+- **Any learner could list or delete any uploaded file.** These are admin-only until files have an owner (B4).
+
+## Open (found in Batch 30)
+
+- **Admin announcements never reach learners:** `POST /admin/notifications` and `/broadcast` write to `admin_notifications`, which the learner notifications API doesn't read.
+- **Several admin analytics, finance and dashboard sub-endpoints return invented figures** (for example `platformScore`, `peakConcurrentUsers`, string completion rates). The admin UI shows only `/admin/dashboard/counts`.
+- **No moderation input:** nothing writes `admin_reports` (learner reports are 501) or `admin_ai_generated_content`.
+- **AI assistant chat has no memory:** each message goes to the AI service alone; stored history isn't sent.
+- **Non-UUID ids return 500 on some routes** (for example `GET /ai/conversations/undefined`) instead of 400 or 404.

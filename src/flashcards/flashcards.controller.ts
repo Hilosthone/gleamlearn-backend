@@ -136,6 +136,7 @@
 
 
 // src/flashcards/flashcards.controller.ts
+import { CountsTowardStreak } from '../streak/streak-activity.js';
 import { Controller, Get, Post, Body, Param, Patch, Delete, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
@@ -208,6 +209,7 @@ export class FlashcardsController {
   }
 
   @Throttle({ short: { limit: 1, ttl: 1000 }, long: { limit: 30, ttl: 60000 } })
+  @CountsTowardStreak('flashcard_review')
   @Post(':id/review')
   @ApiOperation({ summary: 'Submit review response for a flashcard (Leitner system progression)' })
   @ApiResponse({ status: 200, description: 'Flashcard review processed and next interval updated.' })

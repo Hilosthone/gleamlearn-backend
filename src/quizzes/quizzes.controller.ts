@@ -279,6 +279,7 @@
 // }
 
 // src/quizzes/quizzes.controller.ts
+import { CountsTowardStreak } from '../streak/streak-activity.js';
 import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, Req } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
@@ -466,6 +467,7 @@ export class QuizzesController {
 
   @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 10, ttl: 60000 } })
   @UseGuards(JwtAuthGuard)
+  @CountsTowardStreak('quiz_submitted')
   @Post(':id/submit')
   @ApiOperation({
     summary: 'Submit a quiz attempt',

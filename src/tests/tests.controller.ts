@@ -219,6 +219,7 @@
 
 
 // src/tests/tests.controller.ts
+import { CountsTowardStreak } from '../streak/streak-activity.js';
 import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
@@ -362,6 +363,7 @@ export class TestsController {
 
   @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 10, ttl: 60000 } })
   @UseGuards(JwtAuthGuard)
+  @CountsTowardStreak('test_submitted')
   @Post(':id/submit')
   @ApiOperation({
     summary: 'Submit a test attempt',
