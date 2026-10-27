@@ -50,10 +50,11 @@ describe('featureUnavailable: one documented 501 for unimplemented capabilities'
     expect(voice.proxyToPython).toHaveBeenCalledTimes(1);
   });
 
-  it('recommendations: every route is unavailable and nothing is generated', async () => {
-    const controller = new RecommendationsController(new RecommendationsService());
+  // GET /recommendations/courses is computed from the catalogue and profile (course-ranking.ts); the rest are still 501
+  it('recommendations: the routes without an implementation are unavailable and generate nothing', async () => {
+    const controller = new RecommendationsController(new RecommendationsService({} as never));
     const user = { id: 'u1' };
-    for (const route of ['getAll', 'getCourses', 'getTopics', 'getQuizzes', 'getRevision', 'getExams']) {
+    for (const route of ['getAll', 'getTopics', 'getQuizzes', 'getRevision', 'getExams']) {
       await expectUnavailable(() => (controller as any)[route](user), 'Personalised recommendations');
     }
   });

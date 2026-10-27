@@ -37,6 +37,9 @@ const overrides = {
   // Test-only shared key, identical to test/live/start-ai-service.mjs: the real AI_API_KEY is never used by e2e runs
   AI_API_KEY: process.env.E2E_AI_KEY || 'e2e-internal-key-not-a-secret',
   FRONTEND_URL: 'http://localhost:3000',
+  // Uploads go to a local folder, never to the real Cloudinary account in .env
+  STORAGE_DRIVER: 'local',
+  STORAGE_LOCAL_DIR: process.env.E2E_STORAGE_DIR || (process.env.TEMP || '/tmp') + '/gleamlearn-e2e-storage',
 };
 // E2E_DIST lets you run another build (e.g. a git worktree of HEAD) with the same safe overrides
 const child = spawn(process.execPath, [process.env.E2E_DIST || 'dist/main.js'], { env: { ...process.env, ...overrides }, stdio: ['ignore', 'pipe', 'pipe'] });

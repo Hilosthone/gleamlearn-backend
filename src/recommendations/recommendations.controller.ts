@@ -78,7 +78,7 @@ export class RecommendationsController {
   @Get('courses')
   @ApiOperation({ summary: 'Get personalized course recommendations' })
   getCourses(@CurrentUser() user: any) {
-    return this.recsService.proxyToPython(`/courses?userId=${user.id}`);
+    return this.recsService.recommendCourses(user.id);
   }
 
   @Throttle({ short: { limit: 1, ttl: 2000 }, long: { limit: 15, ttl: 60000 } })

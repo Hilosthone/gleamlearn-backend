@@ -309,22 +309,7 @@ export class UsersController {
   unfreezeAccount(@CurrentUser('id') userId: string) {
     return this.usersService.unfreezeAccount(userId);
   }
-
-  @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 10, ttl: 60000 } })
-  @Post('me/profile-picture')
-  @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'Upload or update profile picture' })
-  uploadProfilePicture(@CurrentUser('id') userId: string, @Body() body: { imageUrl: string }) {
-    return this.usersService.updateProfilePicture(userId, body.imageUrl);
-  }
-
-  @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 10, ttl: 60000 } })
-  @Delete('me/profile-picture')
-  @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'Remove profile picture' })
-  removeProfilePicture(@CurrentUser('id') userId: string) {
-    return this.usersService.removeProfilePicture(userId);
-  }
+  // POST/DELETE me/profile-picture: real implementation in src/avatars (these returned success and stored nothing)
 
   @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 15, ttl: 60000 } })
   @Patch('me/academic-profile')

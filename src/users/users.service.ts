@@ -230,17 +230,6 @@ export class UsersService {
     return { message: 'Account successfully unfrozen' };
   }
 
-  async updateProfilePicture(userId: string, imageUrl: string) {
-    // If you have a profilePicture column in your User entity, update it here:
-    // await this.userRepository.update(userId, { profilePicture: imageUrl });
-    return { message: 'Profile picture updated successfully', imageUrl };
-  }
-
-  async removeProfilePicture(userId: string) {
-    // await this.userRepository.update(userId, { profilePicture: null });
-    return { message: 'Profile picture removed successfully' };
-  }
-
   async updateAcademicProfile(userId: string, academicDto: UpdateAcademicProfileDto) {
     const update = pickAllowed(academicDto, ACADEMIC_PROFILE_FIELDS);
     // B2: this service uses the auth User entity, which has no levelOrClass column (500 before). The value is
