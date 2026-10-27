@@ -7,14 +7,16 @@ import { featureUnavailable } from './feature-unavailable.js';
  */
 export function isMissingTable(err: unknown): boolean {
   const e = err as { code?: string; driverError?: { code?: string } } | null;
-  return e?.driverError?.code === '42P01' || e?.code === '42P01'; // undefined_table
+  // undefined_table, or undefined_column (a later migration added the column and has not run here yet)
+  const code = e?.driverError?.code ?? e?.code;
+  return code === '42P01' || code === '42703';
 }
 
 export async function withTable<T>(feature: string, fn: () => Promise<T>): Promise<T> {
   try {
     return await fn();
   } catch (err) {
-    if (isMissingTable(err)) throw featureUnavailable(feature, 'its database table has not been created yet');
+    if (isMissingTable(err)) throw featureUnavailable(feature, 'its database tables have not been created or updated yet');
     throw err;
   }
 }

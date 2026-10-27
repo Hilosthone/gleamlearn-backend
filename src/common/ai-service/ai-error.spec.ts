@@ -97,7 +97,7 @@ describe('AI failures are never reported as successes', () => {
 
   it('AI tutor does not save an unanswered message when the AI fails, and rejects empty replies', async () => {
     const sessionRepo = { findOne: vi.fn().mockResolvedValue({ id: 's1', userId: 'u1' }) };
-    const messageRepo = { create: vi.fn((x: any) => x), save: vi.fn(async (x: any) => x) };
+    const messageRepo = { create: vi.fn((x: any) => x), save: vi.fn(async (x: any) => x), find: vi.fn().mockResolvedValue([]) };
     const service = new AiTutorService(sessionRepo as any, messageRepo as any);
 
     post.mockRejectedValue({ code: 'ECONNABORTED', message: 'timeout' });
@@ -107,5 +107,24 @@ describe('AI failures are never reported as successes', () => {
     post.mockReset().mockResolvedValue({ data: { response: '' } });
     await expect(service.addMessage('s1', 'u1', 'Explain gravity')).rejects.toMatchObject({ status: 502 });
     expect(messageRepo.save).not.toHaveBeenCalled();
+  });
+
+  it('the tutor continues the session: earlier turns are sent with the new message, oldest first', async () => {
+    const sessionRepo = { findOne: vi.fn().mockResolvedValue({ id: 's1', userId: 'u1' }) };
+    const stored = [
+      { sender: 'tutor', content: 'A fraction is a part of a whole.', createdAt: 2 },
+      { sender: 'user', content: 'Teach me fractions', createdAt: 1 },
+    ]; // newest first, as queried
+    const messageRepo = { create: vi.fn((x: any) => x), save: vi.fn(async (x: any) => x), find: vi.fn().mockResolvedValue(stored) };
+    const service = new AiTutorService(sessionRepo as any, messageRepo as any);
+    post.mockReset().mockResolvedValue({ data: { response: 'Next: adding fractions.' } });
+    await service.addMessage('s1', 'u1', 'And then?');
+    expect(post.mock.calls[0][1]).toMatchObject({
+      message: 'And then?',
+      history: [
+        { role: 'user', content: 'Teach me fractions' },
+        { role: 'assistant', content: 'A fraction is a part of a whole.' },
+      ],
+    });
   });
 });

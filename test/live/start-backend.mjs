@@ -39,6 +39,7 @@ const overrides = {
   FRONTEND_URL: 'http://localhost:3000',
   // Uploads go to a local folder, never to the real Cloudinary account in .env
   STORAGE_DRIVER: 'local',
+  YOUTUBE_NETWORK: process.env.E2E_YOUTUBE_NETWORK || 'off', // no calls to YouTube from tests unless asked
   STORAGE_LOCAL_DIR: process.env.E2E_STORAGE_DIR || (process.env.TEMP || '/tmp') + '/gleamlearn-e2e-storage',
 };
 // E2E_DIST lets you run another build (e.g. a git worktree of HEAD) with the same safe overrides

@@ -25,3 +25,14 @@ describe('file routes', () => {
     expect(guards(m)).toEqual([JwtAuthGuard]);
   });
 });
+
+describe('file processing', () => {
+  it('answers 501 instead of reporting a processing that never happened', async () => {
+    const { FilesService } = await import('./files.service.js');
+    const repo = { findOne: vi.fn(), save: vi.fn() };
+    const service = new FilesService(repo as never, {} as never);
+    await expect(service.processFile('f1')).rejects.toMatchObject({ status: 501 });
+    await expect(service.reprocessFile('f1')).rejects.toMatchObject({ status: 501 });
+    expect(repo.save).not.toHaveBeenCalled();
+  });
+});

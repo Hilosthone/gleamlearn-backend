@@ -34,6 +34,7 @@ import { StudySessionsModule } from './study-sessions/study-sessions.module.js';
 import { StreakModule } from './streak/streak.module.js';
 import { AvatarsModule } from './avatars/avatars.js';
 import { LearnerContentModule } from './learner-content/learner-content.js';
+import { LearningModule } from './learning/learning.module.js';
 import { XpModule } from './xp/xp.module.js';
 import { CoinsModule } from './coins/coins.module.js';
 import { GamificationModule } from './gamification/gamification.module.js';
@@ -130,6 +131,7 @@ import { AdminModule } from './admin/admin.module.js';
     StreakModule,
     AvatarsModule,
     LearnerContentModule,
+    LearningModule,
     XpModule,
     CoinsModule,
     GamificationModule,

@@ -23,7 +23,11 @@ function localStorage() {
 /** Minimal in-memory repository supporting the calls these services make. */
 function memRepo<T extends Record<string, any>>(rows: T[] = []) {
   const match = (r: T, where: Record<string, unknown> = {}) =>
-    Object.entries(where).every(([k, v]) => (v && typeof v === 'object' && '_value' in (v as object) ? ((v as any)._value as unknown[]).includes(r[k]) : r[k] === v));
+    Object.entries(where).every(([k, v]) => {
+      if (v && typeof v === 'object' && (v as any)._type === 'isNull') return r[k] === null || r[k] === undefined;
+      if (v && typeof v === 'object' && '_value' in (v as object)) return ((v as any)._value as unknown[]).includes(r[k]);
+      return r[k] === v;
+    });
   let n = 0;
   return {
     rows,
@@ -146,8 +150,11 @@ describe('personal courses and materials', () => {
   it('materials: content-checked upload, owner-only access/delete, attached only to the owner’s course', async () => {
     const { courses, materials } = make();
     const c = await courses.create('u1', { title: 'Chemistry' });
+    const extract = vi.spyOn(materials, 'extract').mockResolvedValue(undefined);
     const m = await materials.upload('u1', { buffer: PDF, originalname: 'notes.pdf' }, c.id);
-    expect(m).toMatchObject({ originalName: 'notes.pdf', mimeType: 'application/pdf', status: 'READY', personalCourseId: c.id });
+    // stored, then the text is extracted in the background: PROCESSING until the AI service answers
+    expect(m).toMatchObject({ originalName: 'notes.pdf', mimeType: 'application/pdf', status: 'PROCESSING', sourceType: 'upload', personalCourseId: c.id });
+    expect(extract).toHaveBeenCalledWith(m.id, PDF, 'application/pdf', 'notes.pdf');
     expect(m).not.toHaveProperty('storageKey');
     await expect(materials.upload('u1', { buffer: EXE, originalname: 'notes.pdf' })).rejects.toThrow('PDF, Word');
     await expect(materials.upload('u2', { buffer: PDF, originalname: 'x.pdf' }, c.id)).rejects.toBeInstanceOf(NotFoundException);
@@ -159,11 +166,32 @@ describe('personal courses and materials', () => {
     expect(await materials.list('u1')).toEqual([]);
   });
 
-  it('AI generation from a locally stored file is reported as unavailable, never faked', async () => {
-    const { materials } = make();
+  it('extraction results are persisted honestly: READY with text, or FAILED with the reason', async () => {
+    const { materials, rows } = make();
+    const ok = vi.spyOn(materials, 'extract');
     const m = await materials.upload('u1', { buffer: PDF, originalname: 'a.pdf' });
-    await expect(materials.generate('u1', m.id, 'summary')).rejects.toBeInstanceOf(NotImplementedException);
+    await ok.mock.results[0].value; // the background extraction (fails: no AI service in unit tests)
+    expect(rows.materials.rows[0]).toMatchObject({ id: m.id, status: 'FAILED' });
+    expect(rows.materials.rows[0].processingError).toBeTruthy();
+    // pasted text needs no AI: READY at once, and its text is readable by its owner only
+    const t = await materials.addText('u1', 'Cells', 'Cells are the basic unit of life. Mitochondria make ATP.');
+    expect(t).toMatchObject({ status: 'READY', sourceType: 'text', textChars: 56 });
+    await expect(materials.addText('u1', 'x', 'too short')).rejects.toBeInstanceOf(BadRequestException);
+    await expect(materials.access('u1', t.id)).rejects.toThrow('pasted text');
   });
+
+  it('retrying a failed extraction re-reads the stored file; READY materials are left alone', async () => {
+    const { materials, rows } = make();
+    vi.spyOn(materials, 'extract').mockResolvedValue(undefined);
+    const m = await materials.upload('u1', { buffer: PDF, originalname: 'a.pdf' });
+    rows.materials.rows[0].status = 'FAILED';
+    const again = await materials.process('u1', m.id);
+    expect(again.status).toBe('PROCESSING');
+    await expect(materials.process('u2', m.id)).rejects.toBeInstanceOf(NotFoundException);
+    rows.materials.rows[0].status = 'READY';
+    expect((await materials.process('u1', m.id)).status).toBe('READY');
+  });
+
 
   it('deleting a course keeps its materials in the library', async () => {
     const { courses, materials, rows } = make();

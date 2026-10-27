@@ -54,13 +54,35 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(500, {"error": {"message": "mock provider failure"}})
             if mode == "slow":
                 time.sleep(5)
-            content = "" if mode == "empty" else "MOCK-NIM: photosynthesis converts light energy into chemical energy."
+            content = "" if mode == "empty" else mock_reply(body.get("messages") or [])
             return self._json(200, {
                 "id": "mock-1", "object": "chat.completion", "created": int(time.time()), "model": body.get("model"),
                 "choices": [{"index": 0, "finish_reason": "stop", "message": {"role": "assistant", "content": content}}],
                 "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
             })
         return self._json(404, {"error": "not found"})
+
+
+def mock_reply(messages):
+    """Deterministic stand-in replies (TEST DOUBLE, not a real model). Structured when JSON is requested."""
+    import re
+    system = next((m.get("content", "") for m in messages if m.get("role") == "system"), "")
+    user = next((m.get("content", "") for m in reversed(messages) if m.get("role") == "user"), "")
+    n = int((re.search(r"exactly (\d+)", user) or re.search(r"about (\d+)", user) or [None, "3"])[1])
+    if '"questions"' in system:
+        return json.dumps({"questions": [
+            {"question": f"MOCK question {i + 1}: what does the source say about topic {i + 1}?",
+             "options": [f"Answer {i + 1}", f"Wrong {i + 1}a", f"Wrong {i + 1}b", f"Wrong {i + 1}c"],
+             "answer": f"Answer {i + 1}", "explanation": f"MOCK explanation {i + 1}.", "topic": "Topic A" if i % 2 == 0 else "Topic B"}
+            for i in range(n)]})
+    if '"cards"' in system:
+        return json.dumps({"cards": [{"question": f"MOCK card {i + 1}?", "answer": f"MOCK answer {i + 1}"} for i in range(n)]})
+    if '"modules"' in system:
+        return json.dumps({"modules": [{"title": f"MOCK module {i + 1}", "objective": f"Understand part {i + 1}"} for i in range(n)]})
+    stamp = re.search(r"\[(\d{1,2}:\d{2}(?::\d{2})?)\]", user)
+    if "QUESTION:" in user and stamp:
+        return f"MOCK-NIM: the source explains this at [{stamp.group(1)}] and also at [99:59]."
+    return "MOCK-NIM: photosynthesis converts light energy into chemical energy."
 
 
 ThreadingHTTPServer(("127.0.0.1", PORT), Handler).serve_forever()

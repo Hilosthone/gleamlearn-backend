@@ -30,6 +30,14 @@ export class PersonalCourse {
   @Column({ type: 'jsonb', default: () => "'[]'" })
   examGoals: string[];
 
+  /** Learning objectives / outline the learner wrote (2026-10-28 migration). */
+  @Column({ type: 'jsonb', default: () => "'[]'" })
+  objectives: string[];
+
+  /** Archived courses are hidden from the default list, never deleted. */
+  @Column({ type: 'timestamptz', nullable: true })
+  archivedAt: Date | null;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 
@@ -91,14 +99,32 @@ export class LearnerMaterial {
   @Column({ type: 'int' })
   sizeBytes: number;
 
-  /** Private storage key (driver-prefixed); never a public URL. */
-  @Column({ type: 'varchar', length: 500 })
-  storageKey: string;
+  /** Private storage key (driver-prefixed); never a public URL. NULL for pasted text (no file). */
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  storageKey: string | null;
 
-  /** READY: stored and its contents verified as the declared type. */
+  /** 'upload' (a file) or 'text' (pasted). 2026-10-28 migration. */
+  @Column({ type: 'varchar', length: 20, default: 'upload' })
+  sourceType: string;
+
+  /** PROCESSING (text being extracted), READY (text available), FAILED (see processingError). */
   @Column({ type: 'varchar', length: 20, default: 'READY' })
   status: string;
 
+  /** Text extracted from the file (or the pasted text). Used for generation and search; never logged. */
+  @Column({ type: 'text', nullable: true, select: false })
+  extractedText: string | null;
+
+  @Column({ type: 'int', default: 0 })
+  textChars: number;
+
+  /** Why extraction failed, in learner terms (e.g. a scanned PDF). */
+  @Column({ type: 'text', nullable: true })
+  processingError: string | null;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
+
+  @UpdateDateColumn({ type: 'timestamptz' })
+  updatedAt: Date;
 }

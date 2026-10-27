@@ -6,6 +6,7 @@ import { v2 as cloudinary } from 'cloudinary';
 import { CLOUDINARY } from './cloudinary.provider.js';
 import { FileEntity } from './entities/file.entity.js';
 import { Readable } from 'stream'; 
+import { featureUnavailable } from '../common/errors/feature-unavailable.js';
 
 @Injectable()
 export class FilesService {
@@ -92,26 +93,16 @@ export class FilesService {
     return { id: file.id, status: file.status, error: file.processingError };
   }
 
-  async processFile(id: string) {
-    const file = await this.findFileById(id);
-    
-    file.status = 'PROCESSING';
-    await this.fileRepo.save(file);
-
-    try {
-      file.status = 'COMPLETED';
-      file.processingError = null;
-      await this.fileRepo.save(file);
-      return { message: 'File processed successfully', file };
-    } catch (error: any) {
-      file.status = 'FAILED';
-      file.processingError = error.message;
-      await this.fileRepo.save(file);
-      throw error;
-    }
+  /*
+   * There is no processing step: these marked the file PROCESSING then COMPLETED without doing anything and
+   * reported "File processed successfully". They now answer 501 and change nothing. (Learner uploads are in
+   * src/learner-content; their AI study aids run through POST /materials/:id/generate.)
+   */
+  async processFile(_id: string): Promise<never> {
+    throw featureUnavailable('File processing', 'no processing step exists; files are used as uploaded');
   }
 
-  async reprocessFile(id: string) {
+  async reprocessFile(id: string): Promise<never> {
     return this.processFile(id);
   }
 }

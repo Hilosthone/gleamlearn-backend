@@ -59,6 +59,9 @@ export const AI_ERROR_CODES = {
   failed: 'AI_FAILED',
 } as const;
 
+/** Coded errors from the AI service's /learn routes whose message is safe to show as-is. */
+const LEARN_CODES = new Set(['NO_TEXT', 'UNSUPPORTED', 'TOO_LARGE', 'BAD_FILE', 'SOURCE_TOO_SHORT', 'AI_BAD_OUTPUT']);
+
 function retryAfterSeconds(error: any): number | undefined {
   const raw = error?.response?.headers?.['retry-after'] ?? error?.response?.data?.detail?.retryAfterSeconds;
   const n = typeof raw === 'number' ? raw : Number.parseInt(String(raw ?? ''), 10);
@@ -87,7 +90,10 @@ export function toAiHttpException(error: any, operation: string): HttpException 
   let result: HttpException;
 
   if (status !== undefined) {
-    if (CLIENT_STATUSES.has(status) && safeClientMessage(detail)) {
+    if (upstreamCode && LEARN_CODES.has(upstreamCode) && typeof detail === 'string' && detail) {
+      // written for learners by routers/learn.py (e.g. a scanned PDF, too little text, unusable AI output)
+      result = aiError(status, upstreamCode, detail.slice(0, 300));
+    } else if (CLIENT_STATUSES.has(status) && safeClientMessage(detail)) {
       result = new HttpException(safeClientMessage(detail)!, status);
     } else if (status === 404) {
       result = new HttpException('The requested AI resource was not found.', HttpStatus.NOT_FOUND);

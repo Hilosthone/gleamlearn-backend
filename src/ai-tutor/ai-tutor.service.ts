@@ -7,6 +7,8 @@ import { TutorMessage } from './entities/tutor-message.entity.js';
 import { getAiHttpClient } from '../common/ai-service/ai-http.client.js';
 import { toAiHttpException } from '../common/ai-service/ai-error.js';
 
+const HISTORY_TURNS = 12;
+
 @Injectable()
 export class AiTutorService {
   constructor(
@@ -53,7 +55,10 @@ export class AiTutorService {
     await this.getSessionById(sessionId, userId); // Verify ownership
 
     // Get the AI Tutor response first, so a failed AI call does not leave an unanswered message in the session
-    const aiResponseText = await this.proxyToPython('ai-tutor/message', { sessionId, message: messageText });
+    // The tutor continues the session: its last turns go with the new message (each used to be answered alone)
+    const previous = await this.messageRepo.find({ where: { sessionId }, order: { createdAt: 'DESC' }, take: HISTORY_TURNS });
+    const history = previous.reverse().map((m) => ({ role: m.sender === 'user' ? 'user' : 'assistant', content: m.content }));
+    const aiResponseText = await this.proxyToPython('ai-tutor/message', { sessionId, message: messageText, history });
 
     // Save user message
     const userMsg = this.messageRepo.create({ sessionId, sender: 'user', content: messageText });

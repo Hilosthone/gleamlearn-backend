@@ -104,9 +104,15 @@ export class PersonalAiService {
     //    and nothing is persisted (no placeholder "offline" replies stored as AI messages).
     let aiResponseText: string;
     try {
+      // earlier turns of this conversation go with the message (each message used to be answered alone)
+      const previous = existingConversation
+        ? await this.messageRepo.find({ where: { conversationId: existingConversation.id }, order: { createdAt: 'DESC' }, take: 12 })
+        : [];
+      const history = previous.reverse().map((m) => ({ role: m.sender === 'user' ? 'user' : 'assistant', content: m.content }));
       const response = await getAiHttpClient().post('/api/v1/chat', {
         message: messageContent,
         conversationId: existingConversation?.id,
+        history,
       });
       aiResponseText = response.data?.message || response.data?.response;
     } catch (error) {

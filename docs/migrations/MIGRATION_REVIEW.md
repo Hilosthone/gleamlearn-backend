@@ -185,3 +185,36 @@ Record each assignment (who, when, what evidence) in the admin audit log. Unassi
 3. Approval to execute each migration (step 4), separately for B4 and B6.
 4. The flag values to use after deployment. The recommended start is `hidden` for both.
 5. Approval to implement the migration-dependent code (owner-scoped files and creator-based assessments, with tests for owners, other users, legacy rows and admins). It will be written against these exact columns and not deployed until step 5 is done.
+
+---
+
+# Migration Review: learner content (2026-10-27)
+
+**Status:** ⬜ Awaiting the owner's approval. **Not executed on production.** Applied only to the disposable local database `gleamlearn_e2e` with `node test/live/apply-sql.mjs docs/migrations/proposed/2026-10-27_learner_content.sql`. It was run twice, which shows it is idempotent.
+
+- **File:** `docs/migrations/proposed/2026-10-27_learner_content.sql`.
+- **What it adds:** four new tables, created with `CREATE TABLE IF NOT EXISTS`; three `CREATE INDEX IF NOT EXISTS`; one `CHECK` constraint. Everything runs in a single `BEGIN … COMMIT`.
+
+| Table | Purpose |
+|---|---|
+| `user_avatars` | The avatar a learner chose, or the private storage key of the picture they uploaded |
+| `personal_courses` | Private courses a learner creates for themselves |
+| `personal_course_modules` | Modules inside those courses, with notes and done-ticks |
+| `learner_materials` | Files a learner uploaded; only metadata and the storage key, never the file contents |
+
+- **No existing table or row is touched.** There are no foreign keys, so the migration cannot fail on existing data. Ownership is enforced by every query filtering on the token's `userId`.
+- **It is safe to deploy the code first.** Until the tables exist, the new routes answer `501 FEATURE_UNAVAILABLE` (`src/common/errors/missing-table.ts`), and nothing else is affected.
+- **Requirement:** `gen_random_uuid()`, available natively in PostgreSQL 13+ or through `pgcrypto`.
+- **Rollback:** a commented block at the end of the file. It deletes the records only; the uploaded objects stay in Cloudinary under `gleamlearn-avatars/` and `gleamlearn-materials/` until they are removed separately.
+
+## Rollout steps (each needs approval)
+
+1. Back up the database.
+2. Run the read-only pre-check in the file. All four `to_regclass` results should be NULL.
+3. Run the forward block.
+4. Run the post-check. It should list all four tables.
+5. Make sure the backend environment has `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY` and `CLOUDINARY_API_SECRET`. These are the same values admin uploads already use, and the presence of `CLOUDINARY_CLOUD_NAME` selects the Cloudinary driver. Do **not** set `STORAGE_DRIVER=local` on Render: its disk is ephemeral, and every deploy would lose the files.
+6. Smoke-test, using a test learner on production:
+   - Settings → Profile picture: choose an avatar, then upload a picture;
+   - Library → Uploaded materials: upload a PDF, open it, generate a summary, delete it;
+   - My courses: create a course.

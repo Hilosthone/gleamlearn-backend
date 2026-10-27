@@ -77,6 +77,16 @@ export class StorageService {
     }
   }
 
+  /** The stored bytes (for re-processing a learner's own file). */
+  async read(key: string): Promise<Buffer> {
+    if (key.startsWith('local:')) return fs.readFile(this.localPath(key));
+    const url = this.aiFetchUrl(key);
+    if (!url) throw new ServiceUnavailableException('The file could not be read from storage.');
+    const res = await fetch(url);
+    if (!res.ok) throw new ServiceUnavailableException('The file could not be read from storage.');
+    return Buffer.from(await res.arrayBuffer());
+  }
+
   async remove(key: string): Promise<void> {
     try {
       if (key.startsWith('local:')) {

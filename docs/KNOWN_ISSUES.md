@@ -91,3 +91,22 @@ Status as of **2026-10-25** (the P0 below was resolved on 2026-10-24: `public.us
 - **No moderation input:** nothing writes `admin_reports` (learner reports are 501) or `admin_ai_generated_content`.
 - **AI assistant chat has no memory:** each message goes to the AI service alone; stored history isn't sent.
 - **Non-UUID ids return 500 on some routes** (for example `GET /ai/conversations/undefined`) instead of 400 or 404.
+
+## Batch 31 (2026-10-27): streak, AI rate limits, avatars, recommendations, personal courses, materials
+
+- **Streak stayed at 0.** Only the manual "Check in" changed it.
+  - Now these count as a study day: completing a lesson, submitting a quiz, test or exam, reviewing a flashcard, or checking in.
+  - Days are calendar days in `STREAK_TIME_ZONE`, default `Africa/Lagos`. Previously they were UTC days.
+  - The update is atomic and counts a day only once. A broken streak reads as 0.
+  - Existing learners start from their next study day; no history is invented.
+- **AI showed "Too many requests" to everyone.**
+  - Behind Render's proxy, every learner shared one IP-based rate-limit bucket, and the AI service limited the backend as a single caller.
+  - Limits are now per signed-in account. `trust proxy` is set on Render automatically (`RENDER=true`).
+  - The backend forwards the learner id to the AI service, which limits per learner.
+  - 429 responses carry `Retry-After` and a `code`. Errors from the model provider (quota used up, rate limit, bad key, timeout) are distinguished from our own limits.
+- **`POST/DELETE /users/me/profile-picture` returned success and stored nothing.** They are now real, backed by a new `user_avatars` table (migration pending).
+- **`POST /files/:id/process` and `/reprocess` reported processing that never happened.** They now answer 501.
+- **Opening a lesson while marking it complete could return 500.** The two requests raced to insert the same unique progress row. Fixed.
+- **`GET /recommendations/courses`** now ranks real catalogue courses by the learner's profile. The other recommendation routes still answer 501.
+- **New, pending the 2026-10-27 migration:** personal courses (`/personal-courses`) and learner-owned private uploads (`/materials`), with signed links that expire. These do not use the legacy `files` table, so the B4 migration is no longer needed for learner uploads.
+- **Open: AI study aids from uploaded materials** need Cloudinary storage, which is the production setting. With local storage they answer 501. A real generation against Cloudinary and the provider was **not** verified locally.

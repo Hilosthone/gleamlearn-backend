@@ -41,26 +41,39 @@ export class LessonsService {
   }
 
   // --- Lesson Progress Tracking ---
+  /**
+   * Applies `change` to the learner's progress row, creating it if needed. Opening a lesson (start) and
+   * "Mark as complete" can run at the same moment: both found no row and both inserted, and the second failed
+   * the UNIQUE (userId, lessonId) constraint with a 500. If another request created the row first, re-read it
+   * and apply the change to that row instead.
+   */
+  private async updateProgress(lessonId: string, userId: string, change: (p: LessonProgressEntity) => void) {
+    for (let attempt = 0; ; attempt++) {
+      let progress = await this.progressRepo.findOne({ where: { lessonId, userId } });
+      if (!progress) progress = this.progressRepo.create({ lessonId, userId, startedAt: new Date() });
+      change(progress);
+      try {
+        return await this.progressRepo.save(progress);
+      } catch (err) {
+        const code = (err as { driverError?: { code?: string } })?.driverError?.code;
+        if (code !== '23505' || attempt > 0) throw err; // unique_violation: the row now exists, retry once
+      }
+    }
+  }
+
   async startLesson(lessonId: string, userId: string) {
     await this.findLessonById(lessonId);
-    let progress = await this.progressRepo.findOne({ where: { lessonId, userId } });
-    if (!progress) {
-      progress = this.progressRepo.create({ lessonId, userId, startedAt: new Date() });
-    } else if (!progress.startedAt) {
-      progress.startedAt = new Date();
-    }
-    return this.progressRepo.save(progress);
+    return this.updateProgress(lessonId, userId, (p) => {
+      if (!p.startedAt) p.startedAt = new Date();
+    });
   }
 
   async completeLesson(lessonId: string, userId: string) {
     await this.findLessonById(lessonId);
-    let progress = await this.progressRepo.findOne({ where: { lessonId, userId } });
-    if (!progress) {
-      progress = this.progressRepo.create({ lessonId, userId, startedAt: new Date() });
-    }
-    progress.isCompleted = true;
-    progress.completedAt = new Date();
-    return this.progressRepo.save(progress);
+    return this.updateProgress(lessonId, userId, (p) => {
+      p.isCompleted = true;
+      p.completedAt = new Date();
+    });
   }
 
   async getLessonProgress(lessonId: string, userId: string) {
