@@ -35,6 +35,17 @@ const summary = (t: AssessmentAttempt): AttemptSummary => ({
   autoSubmitted: t.autoSubmitted,
 });
 
+/** attempts newest first */
+function attemptSummary(mine: AssessmentAttempt[]) {
+  const done = mine.filter((t) => t.status === 'submitted');
+  return {
+    attemptCount: done.length,
+    bestScore: done.length ? Math.max(...done.map((t) => t.score ?? 0)) : null,
+    lastScore: done[0]?.score ?? null,
+    inProgressAttemptId: mine.find((t) => t.status === 'in_progress')?.id ?? null,
+  };
+}
+
 @Injectable()
 export class LearnerAssessmentsService {
   constructor(
@@ -64,22 +75,19 @@ export class LearnerAssessmentsService {
       });
       const attempts = rows.length ? await this.attempts.find({ where: { userId, assessmentId: In(rows.map((r) => r.id)) }, order: { startedAt: 'DESC' } }) : [];
       return rows.map((a) => {
-        const mine = attempts.filter((t) => t.assessmentId === a.id);
-        const done = mine.filter((t) => t.status === 'submitted');
         const { questions: _q, ...view } = learnerView(a);
-        return {
-          ...view,
-          attemptCount: done.length,
-          bestScore: done.length ? Math.max(...done.map((t) => t.score ?? 0)) : null,
-          lastScore: done[0]?.score ?? null,
-          inProgressAttemptId: mine.find((t) => t.status === 'in_progress')?.id ?? null,
-        };
+        return { ...view, ...attemptSummary(attempts.filter((t) => t.assessmentId === a.id)) };
       });
     });
   }
 
+  /** One quiz / mock exam (no answer key), with the same attempt summary as the list, so the page can offer "Resume". */
   get(userId: string, id: string) {
-    return withTable(FEATURE, async () => learnerView(await this.own(userId, id)));
+    return withTable(FEATURE, async () => {
+      const a = await this.own(userId, id);
+      const mine = await this.attempts.find({ where: { userId, assessmentId: a.id }, order: { startedAt: 'DESC' } });
+      return { ...learnerView(a), ...attemptSummary(mine) };
+    });
   }
 
   remove(userId: string, id: string) {

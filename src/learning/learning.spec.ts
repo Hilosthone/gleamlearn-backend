@@ -188,6 +188,8 @@ describe('LearnerAssessmentsService attempts', () => {
     const again = await service.start('u1', 'a1');
     expect(again.attempt.id).toBe(first.attempt.id);
     expect(attempts.rows).toHaveLength(1);
+    // the single-item view says there is an attempt to resume (the page shows "Resume" after a refresh)
+    expect(await service.get('u1', 'a1')).toMatchObject({ inProgressAttemptId: first.attempt.id, attemptCount: 0 });
     await service.save('u1', first.attempt.id, { 0: 'Mitochondria', 1: 'Steel' });
     expect((await service.attempt('u1', first.attempt.id)).answers).toEqual({ 0: 'Mitochondria' });
     const done: any = await service.submit('u1', first.attempt.id, { 1: 'Cellulose', 2: 'DNA' });
@@ -195,6 +197,7 @@ describe('LearnerAssessmentsService attempts', () => {
     expect(done.review.questions[0].explanation).toBe('Respiration.');
     const twice: any = await service.submit('u1', first.attempt.id, { 0: 'Nucleus' });
     expect(twice.attempt.score).toBe(100); // the first result stands
+    expect(await service.get('u1', 'a1')).toMatchObject({ inProgressAttemptId: null, attemptCount: 1, bestScore: 100 });
     await expect(service.save('u1', first.attempt.id, { 0: 'Nucleus' })).rejects.toBeInstanceOf(ConflictException);
     // a new attempt after submitting is allowed
     expect((await service.start('u1', 'a1')).attempt.id).not.toBe(first.attempt.id);
