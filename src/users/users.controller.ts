@@ -259,12 +259,18 @@ import { UsersService } from './users.service.js';
 import { UpdateUserDto, UpdateAcademicProfileDto, UpdatePreferencesDto } from './dto/update-user.dto.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
+import { UpdateNotificationSettingsDto } from '../notifications/dto/notification.dto.js';
+import { featureUnavailable } from '../common/errors/feature-unavailable.js';
 
 @ApiTags('Users & Profile')
 @ApiBearerAuth()
 @Controller('api/v1/users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   // ==========================================
   // AUTHENTICATED USER PRIVATE ROUTES (/me)
@@ -331,16 +337,19 @@ export class UsersController {
   @Patch('me/notification-preferences')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Update push/email notification settings' })
-  updateNotifications(@CurrentUser('id') userId: string, @Body() notifDto: Record<string, any>) {
-    return this.usersService.updateNotificationPreferences(userId, notifDto);
+  updateNotifications(@CurrentUser('id') userId: string, @Body() notifDto: UpdateNotificationSettingsDto) {
+    // the same stored settings as PATCH /notifications/settings (previously echoed the body back without saving it)
+    return this.notifications.updateSettings(userId, notifDto);
   }
 
   @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 15, ttl: 60000 } })
   @Patch('me/privacy-settings')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Update profile visibility and privacy controls' })
-  updatePrivacy(@CurrentUser('id') userId: string, @Body() privacyDto: Record<string, any>) {
-    return this.usersService.updatePrivacySettings(userId, privacyDto);
+  updatePrivacy(@CurrentUser('id') _userId: string, @Body() _privacyDto: Record<string, any>) {
+    // Previously answered "updated successfully" without storing anything. There is no privacy storage and nothing
+    // (public profile, leaderboards) would enforce it, so say so instead of pretending.
+    throw featureUnavailable('Privacy settings', 'Privacy settings are not stored yet, so they cannot be changed.');
   }
 
   // ==========================================

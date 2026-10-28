@@ -83,3 +83,42 @@ export function gradeQuiz(questions: any[] | null | undefined, answers: unknown)
     graded: gradable > 0,
   };
 }
+
+export interface QuestionReview {
+  index: number;
+  question: string;
+  options: string[];
+  /** what the learner answered (as given), or null */
+  chosen: string | null;
+  /** the correct option text, or null when the question has no answer key */
+  answer: string | null;
+  correct: boolean;
+  gradable: boolean;
+  explanation: string;
+  topic: string;
+}
+
+/** Same rules as gradeQuiz, per question — for stored attempts and their review (only shown after submitting). */
+export function reviewQuiz(questions: any[] | null | undefined, answers: unknown): { result: QuizGradeResult; questions: QuestionReview[] } {
+  const list = Array.isArray(questions) ? questions : [];
+  const out = list.map((question, index): QuestionReview => {
+    const options = getOptions(question);
+    const key = getAnswerKey(question);
+    const gradable = normalize(key) !== '';
+    const submitted = findSubmittedAnswer(answers, question, index);
+    const chosen = submitted === undefined || submitted === null || String(submitted).trim() === '' ? null : String(submitted);
+    const answerText = gradable ? (options.find((o) => normalize(o) === canonical(key, options)) ?? String(key)) : null;
+    return {
+      index,
+      question: String(question?.question ?? question?.text ?? question?.prompt ?? ''),
+      options,
+      chosen,
+      answer: answerText,
+      correct: gradable && chosen !== null && canonical(chosen, options) === canonical(key, options),
+      gradable,
+      explanation: String(question?.explanation ?? ''),
+      topic: String(question?.topic ?? question?.subject ?? '').trim(),
+    };
+  });
+  return { result: gradeQuiz(list, answers), questions: out };
+}

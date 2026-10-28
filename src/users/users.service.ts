@@ -260,15 +260,8 @@ export class UsersService {
     };
   }
 
-  async updateNotificationPreferences(userId: string, notifDto: Record<string, any>) {
-    // Save to settings table or user column if implemented
-    return { message: 'Notification preferences updated successfully', data: notifDto };
-  }
-
-  async updatePrivacySettings(userId: string, privacyDto: Record<string, any>) {
-    // Save privacy settings
-    return { message: 'Privacy settings updated successfully', data: privacyDto };
-  }
+  // Notification preferences: UsersController stores them through NotificationsService (PATCH /notifications/settings).
+  // Privacy settings: not stored yet (UsersController answers 501). Both used to echo the body as a fake success.
 
   // ==========================================
   // PUBLIC PROFILE & DISCOVERY METHODS

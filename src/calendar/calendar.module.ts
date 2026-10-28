@@ -32,14 +32,15 @@
 
 // src/calendar/calendar.module.ts
 import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { CalendarController } from './calendar.controller.js';
 import { CalendarService } from './calendar.service.js';
-import { PrismaService } from '../prisma/prisma.service.js'; 
+import { CalendarEvent } from './calendar-event.entity.js';
 
 @Module({
-  imports: [],
+  imports: [TypeOrmModule.forFeature([CalendarEvent])],
   controllers: [CalendarController],
-  providers: [CalendarService, PrismaService], 
+  providers: [CalendarService],
   exports: [CalendarService],
 })
 export class CalendarModule {}

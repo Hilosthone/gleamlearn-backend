@@ -229,12 +229,17 @@ import { SubmitTestDto } from './dto/submit-test.dto.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { AdminOnly } from '../admin/auth/admin-only.decorator.js';
 import { AdminPermission } from '../admin/auth/admin-permissions.js';
+import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
+import { OfficialAttemptsService } from '../official-attempts/official-attempts.js';
 
 @ApiTags('Tests & Assessments System')
 @ApiBearerAuth()
 @Controller('api/v1/tests')
 export class TestsController {
-  constructor(private readonly testsService: TestsService) {}
+  constructor(
+    private readonly testsService: TestsService,
+    private readonly attempts: OfficialAttemptsService,
+  ) {}
 
   // --- Test Management ---
   @UseGuards(JwtAuthGuard)
@@ -265,8 +270,8 @@ export class TestsController {
     summary: 'Get user test attempts',
     description: 'Fetch the complete history of test attempts taken by the authenticated user.'
   })
-  getUserAttempts() {
-    return this.testsService.getUserAttempts();
+  getUserAttempts(@CurrentUser('id') userId: string) {
+    return this.attempts.history(userId, 'test');
   }
 
   // Admins edit these with POST/PATCH/DELETE but could not read them: the learner routes reject admin tokens and
@@ -357,8 +362,8 @@ export class TestsController {
     summary: 'Start a test attempt',
     description: 'Initialize a new student test session and return a unique attempt token.'
   })
-  startAttempt(@Param('id') id: string) {
-    return this.testsService.startAttempt(id);
+  startAttempt(@CurrentUser('id') userId: string, @Param('id') id: string) {
+    return this.attempts.start(userId, 'test', id);
   }
 
   @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 10, ttl: 60000 } })
@@ -369,8 +374,10 @@ export class TestsController {
     summary: 'Submit a test attempt',
     description: 'Submit student answers for a test attempt, grade results, and calculate scores.'
   })
-  submitAttempt(@Param('id') id: string, @Body() submitDto: SubmitTestDto) {
-    return this.testsService.submitAttempt(id, submitDto);
+  async submitAttempt(@CurrentUser('id') userId: string, @Param('id') id: string, @Body() submitDto: SubmitTestDto) {
+    const graded = await this.testsService.submitAttempt(id, submitDto);
+    const saved = await this.attempts.recordSubmission(userId, 'test', await this.testsService.findOne(id), submitDto?.answers);
+    return saved ? { ...graded, attemptId: saved.attemptId, saved: true, message: graded.graded ? 'Test submitted, graded and saved.' : graded.message } : { ...graded, saved: false };
   }
 
   @UseGuards(JwtAuthGuard)
@@ -379,8 +386,8 @@ export class TestsController {
     summary: 'Get test results',
     description: 'Retrieve detailed scoring breakdown and analytical feedback for a specific test.'
   })
-  getResults(@Param('id') id: string) {
-    return this.testsService.getResults(id);
+  getResults(@CurrentUser('id') userId: string, @Param('id') id: string) {
+    return this.attempts.results(userId, 'test', id);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -389,7 +396,7 @@ export class TestsController {
     summary: 'Get specific test attempt details',
     description: 'Fetch specific itemized logs and answers for a single test attempt ID.'
   })
-  getSpecificAttempt(@Param('id') id: string) {
-    return this.testsService.getSpecificAttempt(id);
+  getSpecificAttempt(@CurrentUser('id') userId: string, @Param('id') id: string) {
+    return this.attempts.attempt(userId, id, 'test');
   }
 }

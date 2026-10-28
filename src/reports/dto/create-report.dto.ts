@@ -1,5 +1,5 @@
 // src/reports/dto/create-report.dto.ts
-import { IsString, IsNotEmpty, IsOptional, IsEnum } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsEnum, MaxLength } from 'class-validator';
 
 export enum ReportType {
   SPAM = 'SPAM',
@@ -15,9 +15,11 @@ export class CreateReportDto {
 
   @IsString()
   @IsNotEmpty()
+  @MaxLength(200)
   reason: string;
 
   @IsString()
   @IsOptional()
+  @MaxLength(4000)
   details?: string;
 }

@@ -1,4 +1,4 @@
-import { NotImplementedException } from '@nestjs/common';
+import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { CreatePlannerItemDto } from './dto/study-planner.dto.js';
@@ -24,10 +24,15 @@ describe('PlannerService', () => {
     expect(res.item.id).toBe('p1');
   });
 
-  it('"generate" no longer stores fixed sample sessions as an AI plan', async () => {
+  it('"generate" plans only from the learner’s own course or exam plan: anything else is refused and nothing is stored', async () => {
     const { service, repo } = build();
-    await expect(service.generatePlanner('u1', { targetId: 'c', deadline: '2026-12-01' } as never)).rejects.toBeInstanceOf(NotImplementedException);
+    const none = { findOne: vi.fn(async () => null), find: vi.fn(async () => []) };
+    (repo as any).manager = { getRepository: () => none, query: vi.fn(async () => []), transaction: vi.fn() };
+    await expect(service.generatePlanner('u1', { targetId: '11111111-1111-1111-1111-111111111111', deadline: '2026-12-01' } as never)).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.generatePlanner('u1', { targetId: 'not-a-uuid', deadline: '2026-12-01' } as never)).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.generatePlanner('u1', { targetId: 'x', deadline: 'soon' } as never)).rejects.toBeInstanceOf(BadRequestException);
     expect(repo.save).not.toHaveBeenCalled();
+    expect((repo as any).manager.transaction).not.toHaveBeenCalled();
   });
 
   it('validates the new session', async () => {

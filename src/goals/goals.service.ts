@@ -1,5 +1,5 @@
 // src/goals/goals.service.ts
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { StudyGoal } from './entities/study-goal.entity.js';
@@ -50,7 +50,14 @@ export class GoalsService {
   async update(userId: string, id: string, dto: UpdateStudyGoalDto) {
     const goalRecord = await this.findOne(userId, id);
     Object.assign(goalRecord.goal, stripProtectedFields(dto)); // `id`/`userId` in the body must not retarget the save
-    const updated = await this.goalsRepo.save(goalRecord.goal);
+    const goal = goalRecord.goal;
+    if (dto.targetValue !== undefined && !(dto.targetValue > 0)) throw new BadRequestException('The target must be more than 0.');
+    if (dto.currentValue !== undefined || dto.targetValue !== undefined) {
+      // progress is kept within the target; reaching it completes the goal, lowering it below reopens it
+      goal.currentValue = Math.min(Math.max(0, Number(goal.currentValue) || 0), goal.targetValue);
+      goal.isCompleted = goal.targetValue > 0 && goal.currentValue >= goal.targetValue;
+    }
+    const updated = await this.goalsRepo.save(goal);
     return {
       status: 'success',
       message: 'Study goal updated successfully.',

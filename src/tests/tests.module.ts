@@ -5,9 +5,10 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Test } from './entities/test.entity.js';
 import { TestsService } from './tests.service.js';
 import { TestsController } from './tests.controller.js';
+import { OfficialAttemptsModule } from '../official-attempts/official-attempts.js';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Test]), FilesModule],
+  imports: [OfficialAttemptsModule, TypeOrmModule.forFeature([Test]), FilesModule],
   controllers: [TestsController],
   providers: [TestsService],
   exports: [TestsService],

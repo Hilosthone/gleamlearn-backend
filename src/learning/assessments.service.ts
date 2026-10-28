@@ -4,6 +4,7 @@ import { In, Repository } from 'typeorm';
 import { withTable } from '../common/errors/missing-table.js';
 import { AssessmentAttempt, LearnerAssessment } from './entities.js';
 import { grade, learnerView, sanitiseAnswers } from './grading.js';
+import { recordPerformance } from '../analytics/record-performance.js';
 
 const FEATURE = 'Your quizzes and mock exams';
 /** Answers saved this long after the deadline still count (network delay); later saves are refused. */
@@ -187,6 +188,8 @@ export class LearnerAssessmentsService {
       const done = await this.attempts.findOne({ where: { id: t.id, userId: t.userId } });
       if (done) return done;
     }
+    // this learner's analytics (never fails the submission)
+    await recordPerformance(this.attempts.manager, { userId: t.userId, assessmentType: a.kind, assessmentId: a.id, courseId: a.personalCourseId, score: t.score ?? 0, topics: (result.review.topics ?? []).map((x) => x.topic), startedAt: t.startedAt, submittedAt: t.submittedAt });
     return t;
   }
 

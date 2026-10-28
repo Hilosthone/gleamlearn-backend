@@ -129,8 +129,8 @@ export class LeaderboardsController {
   @ApiOperation({ summary: 'Get school-specific leaderboard' })
   @ApiQuery({ name: 'name', required: true, example: 'Springfield High' })
   @ApiResponse({ status: 200, description: 'School leaderboard retrieved successfully.', type: LeaderboardResponseDto })
-  getSchool(@Query('name') name: string) {
-    return this.leaderboardsService.getSchoolLeaderboard(name);
+  getSchool(@CurrentUser() user: any, @Query('name') name?: string) {
+    return this.leaderboardsService.getSchoolLeaderboard(name, user?.id);
   }
 
   @Throttle({ short: { limit: 2, ttl: 2000 }, long: { limit: 15, ttl: 60000 } })
@@ -138,8 +138,8 @@ export class LeaderboardsController {
   @ApiOperation({ summary: 'Get university-specific leaderboard' })
   @ApiQuery({ name: 'name', required: true, example: 'Obafemi Awolowo University' })
   @ApiResponse({ status: 200, description: 'University leaderboard retrieved successfully.', type: LeaderboardResponseDto })
-  getUniversity(@Query('name') name: string) {
-    return this.leaderboardsService.getUniversityLeaderboard(name);
+  getUniversity(@CurrentUser() user: any, @Query('name') name?: string) {
+    return this.leaderboardsService.getUniversityLeaderboard(name, user?.id);
   }
 
   @Throttle({ short: { limit: 2, ttl: 2000 }, long: { limit: 15, ttl: 60000 } })
@@ -147,8 +147,8 @@ export class LeaderboardsController {
   @ApiOperation({ summary: 'Get department-specific leaderboard' })
   @ApiQuery({ name: 'name', required: true, example: 'Computer Science' })
   @ApiResponse({ status: 200, description: 'Department leaderboard retrieved successfully.', type: LeaderboardResponseDto })
-  getDepartment(@Query('name') name: string) {
-    return this.leaderboardsService.getDepartmentLeaderboard(name);
+  getDepartment(@CurrentUser() user: any, @Query('name') name?: string) {
+    return this.leaderboardsService.getDepartmentLeaderboard(name, user?.id);
   }
 
   @Throttle({ short: { limit: 2, ttl: 2000 }, long: { limit: 15, ttl: 60000 } })

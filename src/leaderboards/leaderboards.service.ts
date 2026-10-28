@@ -5,6 +5,13 @@ import { Repository } from 'typeorm';
 import { User } from '../auth/entities/user.entity.js';
 import { XpTransaction } from '../xp/entities/xp-transaction.entity.js';
 import { AccountStatusService } from '../auth/account-status.service.js';
+import { Enrollment } from '../courses/entities/enrollment.entity.js';
+import { featureUnavailable } from '../common/errors/feature-unavailable.js';
+
+/** Profile field each named leaderboard scope compares against (case-insensitive, trimmed). */
+const SCOPE_FIELD = { school: 'secondarySchool', university: 'university', department: 'department' } as const;
+type NamedScope = keyof typeof SCOPE_FIELD;
+const same = (a: unknown, b: unknown) => typeof a === 'string' && typeof b === 'string' && a.trim() !== '' && a.trim().toLowerCase() === b.trim().toLowerCase();
 
 @Injectable()
 export class LeaderboardsService {
@@ -16,7 +23,7 @@ export class LeaderboardsService {
     private readonly accountStatus: AccountStatusService,
   ) {}
 
-  private async getRankingsQuery(filterColumn?: string, filterValue?: any, startDate?: Date) {
+  private async getRankingsQuery(filterColumn?: string, filterValue?: any, startDate?: Date, onlyUserIds?: Set<string>) {
     // Build aggregate query calculating total XP per user
     const query = this.xpRepo
       .createQueryBuilder('tx')
@@ -38,7 +45,9 @@ export class LeaderboardsService {
       results.map(async (row) => {
         const user = await this.userRepo.findOne({ where: { id: row.userId } });
         if (!user) return null;
-        if (filterColumn && (user as any)[filterColumn] !== filterValue) return null;
+        // a scope with a filter only ranks learners whose profile value matches (never everyone)
+        if (filterColumn && !same((user as any)[filterColumn], filterValue)) return null;
+        if (onlyUserIds && !onlyUserIds.has(user.id)) return null;
         const status = await this.accountStatus.getStatus(user.id);
         if (!status.exists || status.deleted || status.frozen) return null;
 
@@ -65,31 +74,41 @@ export class LeaderboardsService {
     return { status: 'success', scope: 'country', country, leaderboard };
   }
 
-  async getSchoolLeaderboard(school: string) {
-    const leaderboard = await this.getRankingsQuery('school', school);
-    return { status: 'success', scope: 'school', school, leaderboard };
+  /**
+   * School / university / department boards: learners whose profile value matches the name. Without a name, the
+   * signed-in learner's own value is used; with neither, the board is empty and says why (it used to list everyone).
+   */
+  private async namedLeaderboard(scope: NamedScope, name: string | undefined, userId?: string) {
+    let value = name?.trim();
+    if (!value && userId) value = String(((await this.userRepo.findOne({ where: { id: userId } })) as any)?.[SCOPE_FIELD[scope]] ?? '').trim();
+    if (!value) return { status: 'success', scope, [scope]: null, leaderboard: [], message: `Add your ${scope} to your profile to see this leaderboard.` };
+    const leaderboard = await this.getRankingsQuery(SCOPE_FIELD[scope], value);
+    return { status: 'success', scope, [scope]: value, leaderboard };
   }
 
-  async getUniversityLeaderboard(university: string) {
-    const leaderboard = await this.getRankingsQuery('university', university);
-    return { status: 'success', scope: 'university', university, leaderboard };
+  getSchoolLeaderboard(school: string | undefined, userId?: string) {
+    return this.namedLeaderboard('school', school, userId);
   }
 
-  async getDepartmentLeaderboard(department: string) {
-    const leaderboard = await this.getRankingsQuery('department', department);
-    return { status: 'success', scope: 'department', department, leaderboard };
+  getUniversityLeaderboard(university: string | undefined, userId?: string) {
+    return this.namedLeaderboard('university', university, userId);
   }
 
+  getDepartmentLeaderboard(department: string | undefined, userId?: string) {
+    return this.namedLeaderboard('department', department, userId);
+  }
+
+  /** Learners enrolled in the course, ranked by XP (it used to return the global board). */
   async getCourseLeaderboard(courseId: string) {
-    // Course leaderboard logic can be scoped via course-specific XP earnings
-    const leaderboard = await this.getRankingsQuery();
+    if (!courseId?.trim()) return { status: 'success', scope: 'course', courseId: null, leaderboard: [], message: 'Choose a course.' };
+    const enrolled = await this.userRepo.manager.getRepository(Enrollment).find({ where: { courseId }, select: { userId: true } });
+    const leaderboard = enrolled.length ? await this.getRankingsQuery(undefined, undefined, undefined, new Set(enrolled.map((e) => e.userId))) : [];
     return { status: 'success', scope: 'course', courseId, leaderboard };
   }
 
-  async getFriendsLeaderboard(userId: string) {
-    // In production, fetch user's friend network IDs. Returning global subset as baseline:
-    const leaderboard = await this.getRankingsQuery();
-    return { status: 'success', scope: 'friends', userId, leaderboard: leaderboard.slice(0, 10) };
+  /** There are no friend connections in GleamLearn, so there is no friends board (it used to return the global top 10). */
+  async getFriendsLeaderboard(_userId: string): Promise<never> {
+    throw featureUnavailable('Friends leaderboard', 'there are no friend connections yet');
   }
 
   async getWeeklyLeaderboard() {

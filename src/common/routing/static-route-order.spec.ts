@@ -9,6 +9,7 @@ import { TestsController } from '../../tests/tests.controller.js';
 import { TestsService } from '../../tests/tests.service.js';
 import { ExamsController } from '../../exams/exams.controller.js';
 import { ExamsService } from '../../exams/exams.service.js';
+import { OfficialAttemptsService } from '../../official-attempts/official-attempts.js';
 
 // Verifies that static GET routes are reachable and not captured by GET /:id
 describe('static routes declared before :id', () => {
@@ -17,6 +18,8 @@ describe('static routes declared before :id', () => {
   const tests = { getUserAttempts: vi.fn(() => ({ route: 'test-attempts' })), getForLearner: vi.fn(() => ({ route: 'test-by-id' })), findAll: vi.fn(() => ({ route: 'test-manage-all' })), findOne: vi.fn(() => ({ route: 'test-manage-one' })) };
   const exams = { getHistory: vi.fn(() => ({ route: 'exam-history' })), getForLearner: vi.fn(() => ({ route: 'exam-by-id' })), findAll: vi.fn(() => ({ route: 'exam-manage-all' })), findOne: vi.fn(() => ({ route: 'exam-manage-one' })) };
 
+  // attempt history is served by the official-attempts service (stored attempts)
+  const attempts = { history: vi.fn((_userId: string, kind: string) => ({ route: kind === 'exam' ? 'exam-history' : `${kind}-attempts` })) };
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       controllers: [QuizzesController, TestsController, ExamsController],
@@ -24,6 +27,7 @@ describe('static routes declared before :id', () => {
         { provide: QuizzesService, useValue: quizzes },
         { provide: TestsService, useValue: tests },
         { provide: ExamsService, useValue: exams },
+        { provide: OfficialAttemptsService, useValue: attempts },
       ],
     })
       .overrideGuard(JwtAuthGuard)

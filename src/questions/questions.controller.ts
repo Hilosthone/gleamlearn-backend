@@ -5,15 +5,19 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import { QuestionsService } from './questions.service.js';
 import { CreateQuestionDto, UpdateQuestionDto, QueryQuestionsDto } from './dto/question.dto.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
+import { AdminOnly } from '../admin/auth/admin-only.decorator.js';
+import { AdminPermission } from '../admin/auth/admin-permissions.js';
 
 @ApiTags('Questions Bank')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+// Reads: any signed-in learner. Changes to the SHARED question bank: admins with content.manage only (previously any
+// learner could create, edit or delete any question).
 @Controller('api/v1/questions')
 export class QuestionsController {
   constructor(private readonly questionsService: QuestionsService) {}
 
   @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 10, ttl: 60000 } })
+  @AdminOnly(AdminPermission.CONTENT_MANAGE)
   @Post()
   @ApiOperation({ 
     summary: 'Create a new question', 
@@ -25,6 +29,7 @@ export class QuestionsController {
     return this.questionsService.create(createQuestionDto);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get()
   @ApiOperation({ 
     summary: 'Retrieve all questions', 
@@ -36,6 +41,7 @@ export class QuestionsController {
     return this.questionsService.findAll(queryDto);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get(':id')
   @ApiOperation({ 
     summary: 'Get a specific question by ID', 
@@ -49,6 +55,7 @@ export class QuestionsController {
   }
 
   @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 10, ttl: 60000 } })
+  @AdminOnly(AdminPermission.CONTENT_MANAGE)
   @Patch(':id')
   @ApiOperation({ 
     summary: 'Update an existing question', 
@@ -61,6 +68,7 @@ export class QuestionsController {
   }
 
   @Throttle({ short: { limit: 1, ttl: 5000 }, long: { limit: 5, ttl: 60000 } })
+  @AdminOnly(AdminPermission.CONTENT_MANAGE)
   @Delete(':id')
   @ApiOperation({ 
     summary: 'Delete a question', 

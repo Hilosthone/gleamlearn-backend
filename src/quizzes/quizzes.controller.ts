@@ -290,6 +290,8 @@ import { SubmitQuizDto } from './dto/submit-quiz.dto.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { AdminOnly } from '../admin/auth/admin-only.decorator.js';
 import { AdminPermission } from '../admin/auth/admin-permissions.js';
+import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
+import { OfficialAttemptsService } from '../official-attempts/official-attempts.js';
 
 interface RequestWithUser extends Request {
   user: {
@@ -302,7 +304,10 @@ interface RequestWithUser extends Request {
 @ApiBearerAuth()
 @Controller('api/v1/quizzes')
 export class QuizzesController {
-  constructor(private readonly quizzesService: QuizzesService) {}
+  constructor(
+    private readonly quizzesService: QuizzesService,
+    private readonly attempts: OfficialAttemptsService,
+  ) {}
 
   // --- Quiz Management ---
   @UseGuards(JwtAuthGuard)
@@ -339,8 +344,8 @@ export class QuizzesController {
   })
   @ApiResponse({ status: 200, description: 'User attempt history retrieved successfully.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  getUserAttempts() {
-    return this.quizzesService.getUserAttempts();
+  getUserAttempts(@CurrentUser('id') userId: string) {
+    return this.attempts.history(userId, 'quiz');
   }
 
   // Admins edit these with POST/PATCH/DELETE but could not read them: the learner routes reject admin tokens and
@@ -461,8 +466,8 @@ export class QuizzesController {
   })
   @ApiResponse({ status: 201, description: 'Quiz attempt session initialized.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  startAttempt(@Param('id') id: string) {
-    return this.quizzesService.startAttempt(id);
+  startAttempt(@CurrentUser('id') userId: string, @Param('id') id: string) {
+    return this.attempts.start(userId, 'quiz', id);
   }
 
   @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 10, ttl: 60000 } })
@@ -480,7 +485,11 @@ export class QuizzesController {
     @Req() req: RequestWithUser, 
     @Body() submitQuizDto: SubmitQuizDto
   ) {
-    return this.quizzesService.submitAttempt(req.user.id, id, submitQuizDto);
+    return this.quizzesService.submitAttempt(req.user.id, id, submitQuizDto).then(async (graded) => {
+      // also store the attempt (when the table exists) so results and history can be reviewed later
+      const saved = await this.attempts.recordSubmission(req.user.id, 'quiz', await this.quizzesService.findOne(id), submitQuizDto?.answers);
+      return { ...graded, ...(saved ? { attemptId: saved.attemptId, saved: true } : { saved: false }) };
+    });
   }
 
   @UseGuards(JwtAuthGuard)
@@ -491,8 +500,8 @@ export class QuizzesController {
   })
   @ApiResponse({ status: 200, description: 'Quiz results fetched successfully.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  getResults(@Param('id') id: string) {
-    return this.quizzesService.getResults(id);
+  getResults(@CurrentUser('id') userId: string, @Param('id') id: string) {
+    return this.attempts.results(userId, 'quiz', id);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -504,7 +513,7 @@ export class QuizzesController {
   @ApiResponse({ status: 200, description: 'Attempt details retrieved successfully.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
   @ApiResponse({ status: 404, description: 'Attempt not found.' })
-  getSpecificAttempt(@Param('id') id: string) {
-    return this.quizzesService.getSpecificAttempt(id);
+  getSpecificAttempt(@CurrentUser('id') userId: string, @Param('id') id: string) {
+    return this.attempts.attempt(userId, id, 'quiz');
   }
 }

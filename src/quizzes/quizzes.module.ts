@@ -24,9 +24,10 @@ import { QuizzesService } from './quizzes.service.js';
 import { QuizzesController } from './quizzes.controller.js';
 import { XpModule } from '../xp/xp.module.js'; 
 import { CoinsModule } from '../coins/coins.module.js';
+import { OfficialAttemptsModule } from '../official-attempts/official-attempts.js';
 
 @Module({
-  imports: [
+  imports: [OfficialAttemptsModule, 
     TypeOrmModule.forFeature([Quiz]),
     XpModule, 
     CoinsModule,

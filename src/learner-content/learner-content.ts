@@ -37,9 +37,9 @@ import { LearnerMaterial, PersonalCourse, PersonalCourseModule } from './entitie
 
 const COURSES = 'Personal courses';
 const MATERIALS = 'Uploaded materials';
-const MAX_COURSES = 50;
+export const MAX_COURSES = 50;
 const MAX_MODULES = 100;
-const MAX_MATERIALS = 200;
+export const MAX_MATERIALS = 200;
 const DOWNLOAD_LINK_TTL_SECONDS = 5 * 60;
 const MAX_TEXT_CHARS = 200_000;
 

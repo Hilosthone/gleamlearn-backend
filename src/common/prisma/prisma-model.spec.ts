@@ -1,8 +1,5 @@
 import { NotImplementedException } from '@nestjs/common';
-import { CalendarService } from '../../calendar/calendar.service.js';
-import { ReportsService } from '../../reports/reports.service.js';
 import { SubscriptionsService } from '../../subscriptions/subscriptions.service.js';
-import { UsageService } from '../../usage/usage.service.js';
 import { prismaModel } from './prisma-model.js';
 
 /** These Prisma models have no tables: the routes answered 500 ("Cannot read properties of undefined"). */
@@ -15,18 +12,8 @@ describe('services on missing Prisma models answer 501 FEATURE_UNAVAILABLE', () 
     expect(err.getResponse()).toMatchObject({ statusCode: 501, code: 'FEATURE_UNAVAILABLE', feature });
   };
 
-  it('calendar', async () => {
-    const s = new CalendarService(empty);
-    await expect501(s.getAllEvents('u'), 'Calendar');
-    await expect501(s.createEvent('u', { title: 't' } as never), 'Calendar');
-  });
-
-  it('reports and feedback', async () => {
-    const s = new ReportsService(empty);
-    await expect501(s.getUserReports('u'), 'Reports and feedback');
-    await expect501(s.submitFeedback({ message: 'm' } as never, 'u'), 'Reports and feedback');
-    await expect501(s.reportTarget('QUESTION', 'q', { type: 'x', reason: 'y' } as never, 'u'), 'Reports and feedback');
-  });
+  // the calendar, reports/feedback and usage moved to TypeORM (calendar.service.spec.ts, reports.service.spec.ts,
+  // usage.service.spec.ts)
 
   it('subscription plans, status and history', async () => {
     const s = new SubscriptionsService(empty);
@@ -35,14 +22,9 @@ describe('services on missing Prisma models answer 501 FEATURE_UNAVAILABLE', () 
     await expect501(s.getSubscriptionHistory('u'), 'Subscriptions');
   });
 
-  it('usage limits', async () => {
-    await expect501(new UsageService(empty).getUsageOverview('u'), 'Usage limits');
-  });
-
   it('a model that exists is used as before', async () => {
-    const report = { findMany: vi.fn(async () => [{ id: 'r1' }]) };
-    await expect(new ReportsService({ report } as never).getUserReports('u')).resolves.toEqual([{ id: 'r1' }]);
-    expect(report.findMany).toHaveBeenCalledWith({ where: { userId: 'u' }, orderBy: { createdAt: 'desc' } });
+    const plan = { findMany: vi.fn(async () => [{ id: 'p1' }]) };
+    expect(prismaModel({ subscriptionPlan: plan }, 'subscriptionPlan', 'x')).toBe(plan);
     expect(prismaModel({ a: 1 }, 'a', 'x')).toBe(1);
   });
 });

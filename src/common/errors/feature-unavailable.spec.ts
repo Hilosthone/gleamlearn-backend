@@ -2,8 +2,6 @@ import { NotImplementedException } from '@nestjs/common';
 import { featureUnavailable, FEATURE_UNAVAILABLE } from './feature-unavailable.js';
 import { AiService } from '../../ai/ai.service.js';
 import { AiVoiceController } from '../../ai-voice/ai-voice.controller.js';
-import { RecommendationsService } from '../../recommendations/recommendations.service.js';
-import { RecommendationsController } from '../../recommendations/recommendations.controller.js';
 
 async function expectUnavailable(promiseOrFn: Promise<unknown> | (() => unknown), feature: string) {
   let error: unknown;
@@ -50,12 +48,5 @@ describe('featureUnavailable: one documented 501 for unimplemented capabilities'
     expect(voice.proxyToPython).toHaveBeenCalledTimes(1);
   });
 
-  // GET /recommendations/courses is computed from the catalogue and profile (course-ranking.ts); the rest are still 501
-  it('recommendations: the routes without an implementation are unavailable and generate nothing', async () => {
-    const controller = new RecommendationsController(new RecommendationsService({} as never));
-    const user = { id: 'u1' };
-    for (const route of ['getAll', 'getTopics', 'getQuizzes', 'getRevision', 'getExams']) {
-      await expectUnavailable(() => (controller as any)[route](user), 'Personalised recommendations');
-    }
-  });
+  // recommendations are now computed from the learner's records: src/recommendations/learning-recommendations.spec.ts
 });

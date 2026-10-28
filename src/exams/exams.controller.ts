@@ -199,12 +199,17 @@ import { SubmitExamDto } from './dto/submit-exam.dto.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { AdminOnly } from '../admin/auth/admin-only.decorator.js';
 import { AdminPermission } from '../admin/auth/admin-permissions.js';
+import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
+import { OfficialAttemptsService } from '../official-attempts/official-attempts.js';
 
 @ApiTags('Examinations System')
 @ApiBearerAuth()
 @Controller('api/v1/exams')
 export class ExamsController {
-  constructor(private readonly examsService: ExamsService) {}
+  constructor(
+    private readonly examsService: ExamsService,
+    private readonly attempts: OfficialAttemptsService,
+  ) {}
 
   // --- Management ---
   @UseGuards(JwtAuthGuard)
@@ -231,7 +236,7 @@ export class ExamsController {
     summary: 'Get student exam history',
     description: 'Retrieve the history of all official exam attempts taken by the student.'
   })
-  getHistory() { return this.examsService.getHistory(); }
+  getHistory(@CurrentUser('id') userId: string) { return this.attempts.history(userId, 'exam'); }
 
   // Admins edit these with POST/PATCH/DELETE but could not read them: the learner routes reject admin tokens and
   // strip the answer key. These return the stored records unchanged, for admins with content.manage only.
@@ -309,7 +314,7 @@ export class ExamsController {
     summary: 'Start an exam attempt',
     description: 'Initialize an official proctored examination session and generate a unique attempt session token.'
   })
-  startAttempt(@Param('id') id: string) { return this.examsService.startAttempt(id); }
+  startAttempt(@CurrentUser('id') userId: string, @Param('id') id: string) { return this.attempts.start(userId, 'exam', id); }
 
   @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 10, ttl: 60000 } })
   @UseGuards(JwtAuthGuard)
@@ -319,7 +324,11 @@ export class ExamsController {
     summary: 'Submit an exam attempt',
     description: 'Submit student answers for evaluation, calculate scores, and queue the attempt for final grading.'
   })
-  submitAttempt(@Param('id') id: string, @Body() dto: SubmitExamDto) { return this.examsService.submitAttempt(id, dto); }
+  async submitAttempt(@CurrentUser('id') userId: string, @Param('id') id: string, @Body() dto: SubmitExamDto) {
+    const graded = await this.examsService.submitAttempt(id, dto);
+    const saved = await this.attempts.recordSubmission(userId, 'exam', await this.examsService.findOne(id), dto?.answers);
+    return saved ? { ...graded, attemptId: saved.attemptId, saved: true, late: saved.late } : { ...graded, saved: false };
+  }
 
   @UseGuards(JwtAuthGuard)
   @Get(':id/result')
@@ -327,7 +336,7 @@ export class ExamsController {
     summary: 'Get exam result',
     description: 'Retrieve comprehensive breakdown of exam performance, scores, and topic mastery results.'
   })
-  getResult(@Param('id') id: string) { return this.examsService.getResult(id); }
+  getResult(@CurrentUser('id') userId: string, @Param('id') id: string) { return this.attempts.results(userId, 'exam', id); }
 
   @UseGuards(JwtAuthGuard)
   @Get('attempts/:id')
@@ -335,7 +344,7 @@ export class ExamsController {
     summary: 'Get specific exam attempt details',
     description: 'Fetch detailed review logs and question-by-question responses for a specific exam attempt ID.'
   })
-  getSpecificAttempt(@Param('id') id: string) { return this.examsService.getSpecificAttempt(id); }
+  getSpecificAttempt(@CurrentUser('id') userId: string, @Param('id') id: string) { return this.attempts.attempt(userId, id, 'exam'); }
 
   // --- Simulation & Readiness ---
   @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 10, ttl: 60000 } })
@@ -345,7 +354,8 @@ export class ExamsController {
     summary: 'Simulate an examination',
     description: 'Initialize an AI-driven simulation environment to practice under realistic exam constraints.'
   })
-  simulateExam(@Param('id') id: string) { return this.examsService.simulateExam(id); }
+  // a timed simulation is a timed attempt: the deadline comes from the exam's duration
+  simulateExam(@CurrentUser('id') userId: string, @Param('id') id: string) { return this.attempts.start(userId, 'exam', id); }
 
   @UseGuards(JwtAuthGuard)
   @Get(':id/readiness')
@@ -353,5 +363,5 @@ export class ExamsController {
     summary: 'Get exam readiness score',
     description: 'Calculate and evaluate student preparation metrics to determine readiness for the official exam.'
   })
-  getReadiness(@Param('id') id: string) { return this.examsService.getReadiness(id); }
+  getReadiness(@CurrentUser('id') userId: string, @Param('id') id: string) { return this.attempts.readiness(userId, id); }
 }

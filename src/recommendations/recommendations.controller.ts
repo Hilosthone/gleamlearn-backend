@@ -71,7 +71,7 @@ export class RecommendationsController {
   @Get()
   @ApiOperation({ summary: 'Get all personalized recommendations for the authenticated student' })
   getAll(@CurrentUser() user: any) {
-    return this.recsService.proxyToPython(`?userId=${user.id}`);
+    return this.recsService.all(user.id);
   }
 
   @Throttle({ short: { limit: 1, ttl: 2000 }, long: { limit: 15, ttl: 60000 } })
@@ -85,27 +85,27 @@ export class RecommendationsController {
   @Get('topics')
   @ApiOperation({ summary: 'Get recommended study topics based on progress' })
   getTopics(@CurrentUser() user: any) {
-    return this.recsService.proxyToPython(`/topics?userId=${user.id}`);
+    return this.recsService.topics(user.id);
   }
 
   @Throttle({ short: { limit: 1, ttl: 2000 }, long: { limit: 15, ttl: 60000 } })
   @Get('quizzes')
   @ApiOperation({ summary: 'Get recommended practice quizzes for skill gaps' })
   getQuizzes(@CurrentUser() user: any) {
-    return this.recsService.proxyToPython(`/quizzes?userId=${user.id}`);
+    return this.recsService.quizzes(user.id);
   }
 
   @Throttle({ short: { limit: 1, ttl: 2000 }, long: { limit: 15, ttl: 60000 } })
   @Get('revision')
   @ApiOperation({ summary: 'Get spaced-repetition revision recommendations' })
   getRevision(@CurrentUser() user: any) {
-    return this.recsService.proxyToPython(`/revision?userId=${user.id}`);
+    return this.recsService.revision(user.id);
   }
 
   @Throttle({ short: { limit: 1, ttl: 2000 }, long: { limit: 15, ttl: 60000 } })
   @Get('exams')
   @ApiOperation({ summary: 'Get recommended mock exam simulations' })
   getExams(@CurrentUser() user: any) {
-    return this.recsService.proxyToPython(`/exams?userId=${user.id}`);
+    return this.recsService.exams(user.id);
   }
 }

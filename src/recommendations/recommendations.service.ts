@@ -1,17 +1,16 @@
 // src/recommendations/recommendations.service.ts
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import { featureUnavailable } from '../common/errors/feature-unavailable.js';
 import { User } from '../auth/entities/user.entity.js';
 import { Course } from '../courses/entities/course.entity.js';
 import { Enrollment } from '../courses/entities/enrollment.entity.js';
 import { rankCourses, type RankingResult } from './course-ranking.js';
+import { recommendExams, recommendQuizzes, recommendRevision, recommendTopics } from './learning-recommendations.js';
 
 /**
- * Personalised recommendations are not implemented. The AI service's recommendation routes ignore the learner
- * (the userId sent here was never used): they ask the model for generic suggestions, so it invented courses and
- * ids that are not in the catalogue. Until recommendations are computed from the real catalogue and the
- * learner's progress, every route answers 501 FEATURE_UNAVAILABLE without calling the AI service.
+ * Recommendations from the real catalogue (courses, ranked by the learner's profile) and from the learner's own
+ * records (topics, quizzes, revision, exams). The AI service's old recommendation routes are no longer called: they
+ * ignored the learner and invented catalogue items.
  */
 @Injectable()
 export class RecommendationsService {
@@ -37,7 +36,26 @@ export class RecommendationsService {
     );
   }
 
-  async proxyToPython(_path: string): Promise<never> {
-    throw featureUnavailable('Personalised recommendations', 'recommendations are not yet computed from the catalogue and your progress');
+  // Computed from the learner's own records; see learning-recommendations.ts (each item carries its reason).
+  async topics(userId: string) {
+    return { status: 'success', items: await recommendTopics(this.dataSource, userId) };
+  }
+
+  async quizzes(userId: string) {
+    return { status: 'success', items: await recommendQuizzes(this.dataSource, userId) };
+  }
+
+  async revision(userId: string) {
+    return { status: 'success', items: await recommendRevision(this.dataSource, userId) };
+  }
+
+  async exams(userId: string) {
+    return { status: 'success', items: await recommendExams(this.dataSource, userId) };
+  }
+
+  /** Everything at once (the dashboard): each section is independent. */
+  async all(userId: string) {
+    const [topics, quizzes, revision, exams] = await Promise.all([recommendTopics(this.dataSource, userId), recommendQuizzes(this.dataSource, userId), recommendRevision(this.dataSource, userId), recommendExams(this.dataSource, userId)]);
+    return { status: 'success', topics, quizzes, revision, exams };
   }
 }

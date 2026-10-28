@@ -1,93 +1,84 @@
 // src/usage/usage.service.ts
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service.js';
-import { prismaModel } from '../common/prisma/prisma-model.js';
+import { DataSource } from 'typeorm';
+import { isMissingTable } from '../common/errors/missing-table.js';
+import { MAX_COURSES, MAX_MATERIALS } from '../learner-content/learner-content.js';
 
+export interface Quota {
+  /** what is counted, in the learner's words */
+  label: string;
+  used: number;
+  /** null: not capped (only limits the server actually enforces are reported) */
+  limit: number | null;
+  remaining: number | null;
+  /** 'day': counted since midnight WAT, resetting at resetAt; 'total': everything kept */
+  period: 'day' | 'total';
+  resetAt: Date | null;
+}
+
+/** Days follow Nigerian time (Africa/Lagos), as streaks do. */
+const TODAY = `date_trunc('day', now() AT TIME ZONE 'Africa/Lagos') AT TIME ZONE 'Africa/Lagos'`;
+
+/**
+ * Real usage from the learner's own records, against the limits the server enforces. The old version reported
+ * invented daily caps (10 AI requests, 20 quizzes, 5 documents) that nothing enforced, read from Prisma tables that
+ * never existed (always 501). There are no plans or tiers yet (subscriptions aren't live), so limits are the same
+ * for everyone. A missing table counts as nothing used.
+ */
 @Injectable()
 export class UsageService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly db: DataSource) {}
 
-  private model(name: string) {
-    return prismaModel(this.prisma, name, 'Usage limits');
+  private async count(sql: string, userId: string): Promise<number> {
+    try {
+      const rows = (await this.db.query(sql, [userId])) as { n: string | number }[];
+      return Number(rows[0]?.n) || 0;
+    } catch (err) {
+      if (isMissingTable(err)) return 0;
+      throw err;
+    }
   }
 
-  private async getUserTier(userId: string) {
-    const activeSub = await this.model('userSubscription').findFirst({
-      where: { userId, status: 'ACTIVE' },
-      include: { plan: true },
-    });
-    return activeSub ? 'PREMIUM' : 'FREE';
+  private quota(label: string, used: number, limit: number | null, period: Quota['period'], resetAt: Date | null = null): Quota {
+    return { label, used, limit, remaining: limit === null ? null : Math.max(0, limit - used), period, resetAt };
+  }
+
+  private async resetAt(): Promise<Date> {
+    const rows = (await this.db.query(`SELECT (${TODAY}) + interval '1 day' AS t`)) as { t: Date }[];
+    return new Date(rows[0].t);
   }
 
   async getUsageOverview(userId: string) {
-    const tier = await this.getUserTier(userId);
-    const aiUsage = await this.getAiUsage(userId);
-    const documentUsage = await this.getDocumentUsage(userId);
-    const quizUsage = await this.getQuizUsage(userId);
-
-    return {
-      tier,
-      quotas: {
-        ai: aiUsage,
-        documents: documentUsage,
-        quizzes: quizUsage,
-      },
-    };
+    const [ai, documents, courses, quizzes] = await Promise.all([
+      this.getAiUsage(userId),
+      this.getDocumentUsage(userId),
+      this.getCourseUsage(userId),
+      this.getQuizUsage(userId),
+    ]);
+    return { plan: null, quotas: { ai, documents, courses, quizzes } };
   }
 
-  async getAiUsage(userId: string) {
-    const tier = await this.getUserTier(userId);
-    const limit = tier === 'PREMIUM' ? 100 : 10; // Free: 10/day, Premium: 100/day
-
-    // Count AI requests made today
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-
-    const used = await this.model('aiUsageLog').count({
-      where: {
-        userId,
-        createdAt: { gte: startOfDay },
-      },
-    });
-
-    return {
-      limit,
-      used,
-      remaining: Math.max(0, limit - used),
-      resetAt: new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000),
-    };
+  async getAiUsage(userId: string): Promise<Quota> {
+    const used =
+      (await this.count(`SELECT count(*) AS n FROM "learning_resources" WHERE "userId" = $1 AND "createdAt" >= ${TODAY}`, userId)) +
+      (await this.count(`SELECT count(*) AS n FROM "learner_assessments" WHERE "userId" = $1 AND "createdAt" >= ${TODAY}`, userId));
+    return this.quota('AI-generated lessons, notes and quizzes today', used, null, 'day', await this.resetAt());
   }
 
-  async getDocumentUsage(userId: string) {
-    const tier = await this.getUserTier(userId);
-    const limit = tier === 'PREMIUM' ? 50 : 5;
-    const used = await this.model('studyMaterial').count({ where: { userId } });
-
-    return {
-      limit,
-      used,
-      remaining: Math.max(0, limit - used),
-    };
+  async getDocumentUsage(userId: string): Promise<Quota> {
+    const used = await this.count(`SELECT count(*) AS n FROM "learner_materials" WHERE "userId" = $1`, userId);
+    return this.quota('Uploaded materials', used, MAX_MATERIALS, 'total');
   }
 
-  async getQuizUsage(userId: string) {
-    const tier = await this.getUserTier(userId);
-    const limit = tier === 'PREMIUM' ? 200 : 20;
+  async getCourseUsage(userId: string): Promise<Quota> {
+    const used = await this.count(`SELECT count(*) AS n FROM "personal_courses" WHERE "userId" = $1`, userId);
+    return this.quota('Personal courses', used, MAX_COURSES, 'total');
+  }
 
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-
-    const used = await this.model('quizAttempt').count({
-      where: {
-        userId,
-        createdAt: { gte: startOfDay },
-      },
-    });
-
-    return {
-      limit,
-      used,
-      remaining: Math.max(0, limit - used),
-    };
+  async getQuizUsage(userId: string): Promise<Quota> {
+    const used =
+      (await this.count(`SELECT count(*) AS n FROM "assessment_attempts" WHERE "userId" = $1 AND "startedAt" >= ${TODAY}`, userId)) +
+      (await this.count(`SELECT count(*) AS n FROM "official_assessment_attempts" WHERE "userId" = $1 AND "startedAt" >= ${TODAY}`, userId));
+    return this.quota('Quizzes, tests and exams started today', used, null, 'day', await this.resetAt());
   }
 }
