@@ -218,3 +218,90 @@ Record each assignment (who, when, what evidence) in the admin audit log. Unassi
    - Settings → Profile picture: choose an avatar, then upload a picture;
    - Library → Uploaded materials: upload a PDF, open it, generate a summary, delete it;
    - My courses: create a course.
+
+---
+
+# Migration Review: self-service learning (2026-10-28)
+
+**Status:** ⬜ Awaiting the owner's approval. **Not executed on production.** Applied only to the disposable local database `gleamlearn_e2e` with `node test/live/apply-sql.mjs docs/migrations/proposed/2026-10-28_self_service_learning.sql`. It was applied twice there, which shows it is idempotent.
+
+- **File:** `docs/migrations/proposed/2026-10-28_self_service_learning.sql`.
+- **Order:** run it **after** `2026-10-27_learner_content.sql`, because it alters two tables that migration creates. Its pre-check confirms that.
+- **Transaction:** everything runs in a single `BEGIN … COMMIT`, with `IF NOT EXISTS` throughout.
+
+### Changes to existing tables
+
+| Table | Change |
+|---|---|
+| `learner_materials` | Adds `sourceType`, `extractedText`, `textChars`, `processingError` and `updatedAt`, all with defaults or NULL. Makes `storageKey` NULLable, because pasted text has no stored file. No row is changed. Adds an index on `personalCourseId`. |
+| `personal_courses` | Adds `objectives` (jsonb, default `[]`) and `archivedAt` (NULL). |
+
+### New tables
+
+| Table | Purpose |
+|---|---|
+| `learning_resources` | Generated lessons, summaries, notes, study plans, key concepts and explanations. |
+| `learner_assessments` | Quizzes and mock exams a learner generated. Answer keys stay on the server. |
+| `assessment_attempts` | Attempts with saved answers, score and review. Deleting the assessment deletes its attempts (`ON DELETE CASCADE`). |
+| `youtube_session_messages` | Questions and grounded answers in a YouTube session. Sessions are the existing `youtube_resources` rows. |
+
+### Keys and indexes
+
+- **Foreign keys:** optional links to the learner's own material, course, module or resource use `ON DELETE SET NULL`.
+- **Idempotent generation:** `UNIQUE ("userId","requestId")` on resources and assessments. A double-click or a retried request returns the first result and makes no second AI call.
+- **One open attempt:** a partial unique index allows only one in-progress attempt per learner and assessment.
+- **Ownership:** every new row has a `userId`, and every query filters on the token's user.
+
+### Known limitations
+
+- `youtube_session_messages."sessionId"` and `learner_assessments."youtubeSessionId"` have **no foreign key**, because `youtube_resources` is an older table whose key type was not altered.
+- Deleting a session through the API deletes its messages in the same transaction. A direct SQL delete of a `youtube_resources` row would leave its messages orphaned.
+
+### Deployment notes
+
+- **Safe to deploy the code first.**
+  - Until the tables or columns exist, the new routes answer `501 FEATURE_UNAVAILABLE`. A missing column (`42703`) is also mapped to 501.
+  - Material listing keeps working, because the new columns are only read when they exist.
+- **Requirement:** `gen_random_uuid()`, available in PostgreSQL 13+ or through `pgcrypto`.
+- **Rollback:** a commented block at the end of the file. It drops the four new tables and the added columns. Only run it after a backup: dropping the tables deletes the generated material and attempts.
+
+## Rollout steps (each needs approval)
+
+1. Confirm the target is the intended production database. Check the host from the environment's `DATABASE_URL` without printing it.
+2. Back up the database.
+3. Make sure `2026-10-27_learner_content.sql` has been applied. The pre-check should show `learner_materials` and `personal_courses` as NOT NULL, and the four new tables as NULL.
+4. Run the forward block.
+5. Run the post-check queries in the file.
+6. Deploy the AI service, then the backend, then the frontend.
+7. Run the smoke test in the final report: a test learner pastes text, generates a lesson and a quiz, takes and reviews the quiz, creates a YouTube session, and searches.
+
+---
+
+# Production script: both migrations combined (prepared 2026-10-28)
+
+**Status:** ⬜ Prepared for the owner to run in the Supabase SQL Editor. **Not executed on production by the assistant.**
+
+- **File:** `docs/migrations/proposed/2026-10-28_PRODUCTION_learner_content_and_self_service.sql`.
+- **Contents:** the 2026-10-27 statements, then the 2026-10-28 statements, in one transaction, with `lock_timeout` and `statement_timeout`. Before the transaction there is a read-only pre-flight; after it, a read-only verification with the expected results.
+- **Why both are needed:** the deployed backend selects `personal_courses."objectives"` and `"archivedAt"`, and `learner_materials."sourceType"`, `"textChars"`, `"processingError"` and `"updatedAt"`. With only the 2026-10-27 part applied:
+  - avatars would work;
+  - courses and materials would still answer 501 (`42703`).
+- **Checked on a brand-new local scratch database, which was then dropped:**
+  - pre-flight: no tables or index names exist;
+  - the apply step was run twice;
+  - verification: 8 empty tables, column counts 6/11/9/14/16/20/14/7, 14 indexes, 8 foreign keys (only between the new tables), `storageKey` nullable, a pre-existing table and its row unchanged;
+  - TypeORM's schema diff against the compiled entities shows no column or type difference.
+- **Warning: `DB_SYNCHRONIZE` must stay `false`.** TypeORM would drop this script's foreign keys, partial unique indexes and CHECK constraints, because the entities don't declare them.
+
+---
+
+# From now on: versioned migrations (2026-10-28)
+
+Schema changes are now files in `database/migrations/`, applied by `npm run db:migration:run` and recorded in `schema_migrations`. See `database/README.md`.
+
+- **The files in `docs/migrations/proposed/` stay as history.** The runner never runs them.
+- **First migration:** `20261028000000_learner_content_and_self_service.sql` is the production script above.
+  - Production **already has** its tables (applied manually by the owner).
+  - It is to be **baselined**, not run: `npm run db:migration:baseline -- 20261028000000 --dry-run --target-env-file=<env>`, then the same with `--confirm-target=<database>@<host>:<port>` in place of `--dry-run`. Both need the owner's approval; see `database/README.md`.
+  - The baseline records it only if the live schema matches the pinned expected snapshot `20261028000000_learner_content_and_self_service.schema.json`: columns, indexes, constraints and triggers, compared exactly in a READ ONLY transaction.
+- **Still unapplied proposals (B4, B6, users recovery):** they remain proposals. If any is approved later, it becomes a new file in `database/migrations/`.

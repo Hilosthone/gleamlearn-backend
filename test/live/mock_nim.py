@@ -69,6 +69,20 @@ def mock_reply(messages):
     system = next((m.get("content", "") for m in messages if m.get("role") == "system"), "")
     user = next((m.get("content", "") for m in reversed(messages) if m.get("role") == "user"), "")
     n = int((re.search(r"exactly (\d+)", user) or re.search(r"about (\d+)", user) or [None, "3"])[1])
+    if '"keyTakeaways"' in system:  # visual lesson: one step per supported visual family
+        return json.dumps({
+            "title": "MOCK visual lesson",
+            "summary": "MOCK summary of the topic.",
+            "steps": [
+                {"title": "MOCK molecule", "explanation": "MOCK: two hydrogens bonded to one oxygen.", "visual": {"type": "molecule", "name": "Water", "atoms": [{"id": "o", "element": "O"}, {"id": "h1", "element": "H"}, {"id": "h2", "element": "H"}], "bonds": [{"a": "o", "b": "h1"}, {"a": "o", "b": "h2"}], "caption": "H2O"}},
+                {"title": "MOCK graph", "explanation": "MOCK: a parabola.", "visual": {"type": "graph2d", "family": "quadratic", "a": 1, "xMin": -5, "xMax": 5, "points": [{"x": 0, "y": 0, "label": "vertex"}]}},
+                {"title": "MOCK forces", "explanation": "MOCK: two forces and their resultant.", "visual": {"type": "vectors", "vectors": [{"x": 3, "y": 0, "label": "F1"}, {"x": 0, "y": 2, "label": "F2"}], "showResultant": True}},
+                {"title": "MOCK cycle", "explanation": "MOCK: a three-stage cycle.", "visual": {"type": "flow", "cycle": True, "nodes": [{"id": "a", "label": "Stage A"}, {"id": "b", "label": "Stage B"}, {"id": "c", "label": "Stage C"}], "edges": [{"from": "a", "to": "b"}, {"from": "b", "to": "c"}, {"from": "c", "to": "a"}]}},
+                {"title": "MOCK parts", "explanation": "MOCK: labelled parts.", "visual": {"type": "labeled", "subject": "Cell", "parts": [{"label": "Nucleus", "description": "Holds DNA"}, {"label": "Membrane", "description": "Controls entry"}]}},
+                {"title": "MOCK shape", "explanation": "MOCK: a cylinder.", "visual": {"type": "shape3d", "shape": "cylinder", "dimensions": {"radius": 1, "height": 2}, "labels": ["r", "h"]}},
+            ],
+            "keyTakeaways": ["MOCK takeaway"],
+        })
     if '"questions"' in system:
         return json.dumps({"questions": [
             {"question": f"MOCK question {i + 1}: what does the source say about topic {i + 1}?",

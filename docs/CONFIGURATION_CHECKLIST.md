@@ -25,6 +25,9 @@
 | `DATABASE_URL` | **Yes** | Prisma modules (calendar, reports, search, subscriptions, usage); TypeORM only if it contains `supabase.co` | Prisma modules fail at runtime | **Won't start** in production | | |
 | `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_USER`, `DATABASE_PASSWORD`, `DATABASE_NAME` | **Yes** unless `DATABASE_URL` is a `supabase.co` URL | TypeORM connection | Falls back to `localhost`/`postgres`/`postgres`/`mycoursea_db` | **Won't start** in production; local defaults kept for development | | |
 | `DB_SYNCHRONIZE` | No (default `false`) | Opt-in schema sync (Batch 1) | Off (safe) | Off. **Must stay unset or `false` on Render.** | | |
+| `MIGRATION_DATABASE_URL` | No. **Not on Render**; set it only in the shell of whoever runs an approved migration. | Target for `npm run db:migration:*` only (`database/README.md`). Without it, the runner uses the API's own database settings. | Runner uses the API's database | Same | n/a | |
+| `MIGRATION_DATABASE_SSL_ROOT_CERT` | Only with a remote `MIGRATION_DATABASE_URL` (e.g. Supabase). **Not on Render.** | Path to the database CA certificate; the runner verifies TLS certificates for every non-local host | Runner uses Node's public CAs; Supabase connections then fail verification | Same | n/a | |
+| `MIGRATION_STRICT_TARGET` | No. **Not on Render.** | `true` makes the runner require `MIGRATION_DATABASE_URL` and never use the API's database settings | Off | Same | n/a | |
 | `AI_SERVICE_URL` | **Yes on Render** | Base URL of the AI service | Local default `http://127.0.0.1:8000`, so AI calls fail with 503 | **Won't start** in production | | |
 | `AI_API_KEY` | **Yes** | Internal auth to the AI service (**must equal the AI service's value**) | Sent empty, so AI calls fail with 502 | **Won't start** | | |
 | `AI_HTTP_TIMEOUT_MS` | No (default `120000`) | Backend → AI timeout | Default | Default | | |

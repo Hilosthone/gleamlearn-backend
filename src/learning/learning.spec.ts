@@ -132,6 +132,39 @@ describe('LearningService.generate', () => {
     expect(post).toHaveBeenCalledTimes(1);
   });
 
+  it('a visual lesson from just a topic: validated, stored as JSON, and the AI is told it is a topic (not material)', async () => {
+    const { service, post, resources } = make();
+    post.mockResolvedValue({
+      data: {
+        lesson: {
+          title: 'Water',
+          summary: 'A small molecule.',
+          steps: [
+            { title: 'Atoms', explanation: 'Two hydrogens, one oxygen.', visual: { type: 'molecule', atoms: [{ id: 'o', element: 'O' }, { id: 'h1', element: 'H' }, { id: 'h2', element: 'H' }], bonds: [{ a: 'o', b: 'h1' }, { a: 'o', b: 'h2' }] } },
+            { title: 'Shape', explanation: 'It is bent.', visual: { type: 'script', code: 'alert(1)' } },
+          ],
+        },
+      },
+    });
+    const r = await service.generate('u1', { requestId: '33333333-3333-3333-3333-333333333333', kind: 'visual_lesson', sourceType: 'topic', text: 'The water molecule' } as never);
+    expect(r).toMatchObject({ type: 'resource', kind: 'visual_lesson' });
+    expect(post.mock.calls[0][1]).toMatchObject({ kind: 'visual_lesson', sourceMode: 'topic', text: 'Topic: The water molecule' });
+    const stored = JSON.parse(resources.rows[0].content);
+    expect(stored.steps[0].visual).toMatchObject({ type: 'molecule' });
+    expect(stored.steps[1].visual).toBeNull(); // an unknown visual type is dropped, its text kept
+    expect(stored.basis).toBe('topic'); // from the request, not from the AI
+    expect(resources.rows[0]).toMatchObject({ kind: 'visual_lesson', sourceType: 'topic' });
+  });
+
+  it('a topic alone is only accepted for visual lessons; an unusable AI lesson stores nothing', async () => {
+    const { service, post, resources } = make();
+    await expect(service.generate('u1', { requestId: '44444444-4444-4444-4444-444444444444', kind: 'quiz', sourceType: 'topic', text: 'Cells' } as never)).rejects.toThrow(/only make a visual lesson/);
+    await expect(service.generate('u1', { requestId: '55555555-5555-5555-5555-555555555555', kind: 'visual_lesson', sourceType: 'topic', text: 'ab' } as never)).rejects.toThrow(/3 to 300/);
+    post.mockResolvedValue({ data: { lesson: { title: 'x', steps: [{ title: 'only one', explanation: 'e' }] } } });
+    await expect(service.generate('u1', { requestId: '66666666-6666-6666-6666-666666666666', kind: 'visual_lesson', sourceType: 'topic', text: 'Cells' } as never)).rejects.toThrow(/usable visual lesson/);
+    expect(resources.rows).toHaveLength(0);
+  });
+
   it('two identical requests at the same moment make one AI call', async () => {
     const { service, post } = make();
     post.mockImplementation(() => new Promise((res) => setTimeout(() => res({ data: { content: 'x' } }), 20)));

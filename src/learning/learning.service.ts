@@ -10,8 +10,9 @@ import { YoutubeEntity } from '../youtube/entities/youtube.entity.js';
 import { Deck } from '../flashcards/entities/deck.entity.js';
 import { Flashcard } from '../flashcards/entities/flashcard.entity.js';
 import { LearnerAssessment, LearningResource, TEXT_RESOURCE_KINDS, type SourceType, type StoredQuestion } from './entities.js';
+import { validateVisualLesson, visualLessonText } from './visual-lesson.js';
 
-export const GENERATE_KINDS = [...TEXT_RESOURCE_KINDS, 'quiz', 'exam', 'flashcards', 'course_plan'] as const;
+export const GENERATE_KINDS = [...TEXT_RESOURCE_KINDS, 'quiz', 'exam', 'flashcards', 'course_plan', 'visual_lesson'] as const;
 export type GenerateKind = (typeof GENERATE_KINDS)[number];
 
 export interface GenerateOptions {
@@ -60,6 +61,7 @@ interface Source {
 const FEATURE = 'Learning from your material';
 const MAX_SOURCE_CHARS = 200_000;
 const KIND_LABEL: Record<GenerateKind, string> = {
+  visual_lesson: 'Visual lesson',
   lesson: 'Lesson',
   summary: 'Summary',
   notes: 'Notes',
@@ -96,6 +98,12 @@ export class LearningService {
       return input.sourceId;
     };
     switch (input.sourceType) {
+      case 'topic': {
+        // a short topic, taught from general knowledge (only for visual lessons, which say so to the learner)
+        const topic = (input.text ?? '').replace(/s+/g, ' ').trim();
+        if (topic.length < 3 || topic.length > 300) throw new BadRequestException('Name a topic in 3 to 300 characters.');
+        return { ...base, title: input.title?.trim() || topic.slice(0, 120), text: `Topic: ${topic}` };
+      }
       case 'text': {
         const text = (input.text ?? '').trim();
         if (text.length < 20) throw new BadRequestException('Add at least a few sentences of text to learn from.');
@@ -140,7 +148,9 @@ export class LearningService {
       case 'resource': {
         const r = await this.resources.findOne({ where: { id: need(), userId } });
         if (!r) throw new NotFoundException('Lesson not found.');
-        return { ...base, title: r.title, text: r.content, materialId: r.materialId, personalCourseId: r.personalCourseId, moduleId: r.moduleId, youtubeSessionId: r.youtubeSessionId };
+        // a visual lesson is stored as JSON: learn from its words, not its structure
+        const text = r.kind === 'visual_lesson' ? visualLessonText(r.content) : r.content;
+        return { ...base, title: r.title, text, materialId: r.materialId, personalCourseId: r.personalCourseId, moduleId: r.moduleId, youtubeSessionId: r.youtubeSessionId };
       }
       case 'note': {
         const n = await ds.getRepository(NoteEntity).findOne({ where: { id: need(), userId } });
@@ -189,6 +199,9 @@ export class LearningService {
     if (input.personalCourseId && !(await this.dataSource.getRepository(PersonalCourse).findOne({ where: { id: input.personalCourseId, userId } }))) {
       throw new NotFoundException('Course not found.');
     }
+    if (input.sourceType === 'topic' && input.kind !== 'visual_lesson') {
+      throw new BadRequestException('A topic on its own can only make a visual lesson; add material for other kinds.');
+    }
     if (input.kind === 'course_plan' && !(input.personalCourseId || input.sourceType === 'course')) {
       throw new BadRequestException('Choose the course to plan.');
     }
@@ -202,6 +215,7 @@ export class LearningService {
         kind: input.kind,
         text: src.text,
         title: src.title.slice(0, 200),
+        ...(input.sourceType === 'topic' ? { sourceMode: 'topic' } : {}),
         options: { count: options.count, difficulty: options.difficulty, level: options.level, examGoal: options.examGoal, objective: options.objective, subject: options.subject, focus: options.focus },
       });
       out = res.data ?? {};
@@ -217,6 +231,15 @@ export class LearningService {
         if (!content) throw new BadRequestException('The AI returned an empty answer. Please try again.');
         const r = await this.resources.save(
           this.resources.create({ userId, requestId: input.requestId, kind: input.kind as LearningResource['kind'], title, content, sourceType: input.sourceType, ...links, options: options as never, truncated }),
+        );
+        return { type: 'resource', id: r.id, resourceId: r.id, kind: input.kind, title: r.title, reused: false };
+      }
+
+      if (input.kind === 'visual_lesson') {
+        const lesson = validateVisualLesson(out.lesson);
+        if (!lesson) throw new BadRequestException('The AI did not return a usable visual lesson. Please try again.');
+        const r = await this.resources.save(
+          this.resources.create({ userId, requestId: input.requestId, kind: 'visual_lesson', title, content: JSON.stringify({ ...lesson, basis: input.sourceType === 'topic' ? 'topic' : 'material' }), sourceType: input.sourceType, ...links, options: options as never, truncated }),
         );
         return { type: 'resource', id: r.id, resourceId: r.id, kind: input.kind, title: r.title, reused: false };
       }

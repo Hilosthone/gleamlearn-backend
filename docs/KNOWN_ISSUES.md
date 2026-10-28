@@ -110,3 +110,30 @@ Status as of **2026-10-25** (the P0 below was resolved on 2026-10-24: `public.us
 - **`GET /recommendations/courses`** now ranks real catalogue courses by the learner's profile. The other recommendation routes still answer 501.
 - **New, pending the 2026-10-27 migration:** personal courses (`/personal-courses`) and learner-owned private uploads (`/materials`), with signed links that expire. These do not use the legacy `files` table, so the B4 migration is no longer needed for learner uploads.
 - **Open: AI study aids from uploaded materials** need Cloudinary storage, which is the production setting. With local storage they answer 501. A real generation against Cloudinary and the provider was **not** verified locally.
+
+## Batch 32 (2026-10-28): self-service learning
+
+Pending the `2026-10-28_self_service_learning.sql` migration. Until it runs, the routes below answer 501.
+
+- **Learners no longer depend on admin-published content.** They can:
+  - create courses with an outline, archive them, and generate a module plan;
+  - upload PDF, DOCX or TXT files, or paste text;
+  - generate lessons, summaries, notes, key concepts, explanations, study plans, flashcards, quizzes and mock exams from their own material, a course, a module, or a YouTube transcript;
+  - take quizzes and exams with autosave, a timer and auto-submit, and review the result with topics to revise.
+- **Every generated question is labelled as AI-generated practice, not official past questions.**
+- **Fixed:** the AI tutor's "AI limit reached for now… wait 60 seconds" message.
+  - Cause: each AI-service router created its own slowapi `Limiter`, so some routes fell back to tight per-IP limits shared by all learners behind the backend.
+  - Fix: one shared limiter keyed per learner, with a 30/min ceiling. The backend still enforces the real per-learner limits.
+  - The tutor and assistant now send recent conversation history, so follow-up questions have context.
+- **Open: scanned PDFs (OCR is not implemented).**
+  - A PDF with almost no extractable text is marked FAILED with a message saying so.
+  - The learner can paste the text instead. Nothing is generated from an empty extraction.
+- **Open: YouTube transcripts depend on the unofficial `youtube-transcript` package.**
+  - Video titles come from YouTube's official oEmbed endpoint, but captions do not.
+  - YouTube can change or block that package, and many videos have no captions.
+  - When no transcript is available, the session says so and offers to paste one or retry. The AI never answers about a video without a transcript.
+  - Not verified against live YouTube in this batch: local tests run with `YOUTUBE_NETWORK=off`.
+- **Open: generation quality was verified only with the mock model** (`test/live/mock_nim.py`). The real provider was not called in tests, so the plumbing, persistence, grading and citation rules are verified, but the quality of real output is not.
+- **Open: long material is truncated.**
+  - The AI service reads at most 8 chunks of 12,000 characters.
+  - Longer material is used in part, and the result is flagged `truncated`, with a note shown to the learner.

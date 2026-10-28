@@ -8,6 +8,7 @@ import { RequestContextInterceptor } from './common/request-context.js';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
+import { typeOrmConnectionConfig } from './database/connection-config.js';
 import { MailModule } from './mail/mail.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { UsersModule } from './users/users.module.js';
@@ -75,34 +76,8 @@ import { AdminModule } from './admin/admin.module.js';
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => {
-        const databaseUrl = configService.get<string>('DATABASE_URL');
-        // Schema auto-sync is opt-in only (DB_SYNCHRONIZE=true). It must stay off against shared/production databases.
-        const synchronize = configService.get<string>('DB_SYNCHRONIZE', 'false').toLowerCase() === 'true';
-
-        if (databaseUrl && databaseUrl.includes('supabase.co')) {
-          return {
-            type: 'postgres' as const,
-            url: databaseUrl,
-            autoLoadEntities: true, 
-            synchronize,
-            ssl: {
-              rejectUnauthorized: false,
-            },
-          };
-        }
-
-        return {
-          type: 'postgres' as const,
-          host: configService.get<string>('DATABASE_HOST', 'localhost'),
-          port: parseInt(configService.get<string>('DATABASE_PORT', '5432'), 10),
-          username: configService.get<string>('DATABASE_USER', 'postgres'),
-          password: configService.get<string>('DATABASE_PASSWORD', 'postgres'),
-          database: configService.get<string>('DATABASE_NAME', 'mycoursea_db'),
-          autoLoadEntities: true,
-          synchronize,
-        };
-      },
+      // connection rules live in src/database/connection-config.ts (shared with the migration runner's parity test)
+      useFactory: (configService: ConfigService) => typeOrmConnectionConfig((name) => configService.get<string>(name)),
     }), 
     HealthModule,
     MailModule,

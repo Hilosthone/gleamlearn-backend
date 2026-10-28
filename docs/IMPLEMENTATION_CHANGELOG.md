@@ -2040,3 +2040,118 @@ The base `tsconfig.json` still reports pre-existing errors in spec files (no vit
   - `ai-voice.controller.ts` had an import added in the comment.
 - **How it was caught:** the type check and a scan of the diffs for edited comment lines.
 - **Verification:** all were corrected and re-verified. Every changed file was checked so that no `//` line changed except the intended inline comments.
+
+## Batch 32 (2026-10-27/28): Self-service learning, YouTube sessions, global search, AI tutor limit fix
+
+**Status:** ✅ Verified locally against the disposable `gleamlearn_e2e` database, the real local AI service, and the **mock** model (`test/live/mock_nim.py`). Storage was `STORAGE_DRIVER=local` and YouTube calls were off (`YOUTUBE_NETWORK=off`). The migration `2026-10-28_self_service_learning.sql` is **not executed on production**; see `docs/migrations/MIGRATION_REVIEW.md`. The owner committed the code; nothing was pushed or deployed by the assistant.
+
+### Backend (`src/learning/`, `src/learner-content/`)
+
+- **`POST /api/v1/learning/generate`** builds lessons, summaries, notes, key concepts, explanations, study plans, flashcards (into a real deck), quizzes, mock exams, and course plans (into course modules).
+  - Sources: the learner's material, pasted text, course, module, earlier resource, note, or YouTube transcript.
+  - Idempotent per `requestId`: an in-flight map plus a unique index. A repeated request returns the first result without a second AI call.
+- **`/api/v1/learning/resources`**: list, get, rename, complete (counts toward the streak) and delete.
+- **`/api/v1/learner-assessments`**:
+  - list (with an attempt summary) and get (now with the same summary, so the page can offer "Resume");
+  - start, which resumes the open attempt (one at most, enforced by a partial unique index);
+  - autosave; practice mode checks each answer;
+  - timed exams auto-submit after the deadline with a 30-second grace period;
+  - submit is graded on the server and is idempotent; it counts toward the streak;
+  - review covers topics, strengths and what to revise; attempt history is kept.
+  - Questions are labelled "AI-generated practice questions — not official past questions".
+- **Materials:**
+  - an upload starts as PROCESSING, and text is extracted by the AI service in the background;
+  - READY or FAILED, with an honest reason; scanned PDFs fail with a message explaining that OCR is not available;
+  - retry; pasted-text materials;
+  - extraction that is still PROCESSING after 10 minutes is shown as FAILED;
+  - content is never logged.
+- **Personal courses:** objectives (the course outline) and archive.
+- **`/api/v1/youtube-sessions`:**
+  - create from a link (URL normalised; title from oEmbed);
+  - transcript fetched from captions, pasted, or refetched;
+  - grounded Q&A whose timestamps are checked against the transcript (invented ones are not linked);
+  - messages saved; delete.
+- **`GET /api/v1/search/everything`:** parameterised and owner-scoped search over courses, personal courses, materials, resources, assessments, YouTube sessions, notes and decks. It reports `unavailableTypes` instead of failing.
+- **AI tutor and assistant** send recent history (at most 12 turns and 4,000 characters).
+
+### AI service
+
+- **`routers/learn.py`:**
+  - `/extract` handles PDF, DOCX and TXT up to 15 MB;
+  - `/generate` works in chunks and validates the questions;
+  - `/ask` answers only from the transcript.
+- **Root cause of "AI limit reached for now… wait 60 seconds":** each router built its own slowapi `Limiter`, so some routes fell back to per-IP limits shared by every learner behind the backend.
+  - Fix: one shared limiter keyed per learner, with a 30/min ceiling.
+  - A 429 now carries a `code` and `Retry-After`.
+  - The backend's per-learner limits are unchanged and still enforced.
+
+### Results
+
+| Check | Result |
+|---|---|
+| `npx vitest run` | **652/652** (58 files) |
+| `npx tsc --noEmit -p tsconfig.build.json` | 0 errors |
+| `npx nest build` | ok |
+| AI service `python -m unittest discover -s tests -t .` | **54/54** (mocked provider) |
+| Live loop `test/live/self-service-learning.mjs` (real backend + real AI service + mock model) | **28/28** |
+
+## Batch 33 (2026-10-28): Versioned SQL migrations with history, locking and verified baseline
+
+**Status:** ✅ Built and tested locally (PostgreSQL 18.6, throw-away databases). **Nothing was run on production**; there was no deploy, commit or push. See `database/README.md`.
+
+- **Runner:** `scripts/db/migrate.mjs` and `migrator.mjs`.
+  - Plain Node with the existing `pg`; no new dependencies.
+  - `database/migrations/<14-digit version>_<name>.sql` files are applied in order.
+  - Each runs in one transaction under a transaction-level advisory lock, with a re-check, then a `schema_migrations` row (SHA-256 checksum).
+  - Failures roll back and record nothing.
+  - Concurrent runners apply each migration once.
+  - Files edited after being applied are detected.
+  - `-- migrate:no-transaction` is available for statements such as `CREATE INDEX CONCURRENTLY`.
+  - Any non-local database needs `--confirm-target=<db>@<host>` before the runner even connects.
+- **Commands:** `npm run db:migration:status`, `:run` (with `--dry-run`), `:baseline` (with `--dry-run`), `:create`, `:make-verify`. None runs at start-up or in `npm run build`.
+- **Same database as the API:** the TypeORM connection rules moved unchanged from `app.module.ts` to `src/database/connection-config.ts`, and a spec checks that the runner resolves the same target. `MIGRATION_DATABASE_URL` optionally overrides the target for migrations only.
+- **First migration:** `20261028000000_learner_content_and_self_service.sql` contains the statements production ran manually, without `IF NOT EXISTS`. Production will adopt it with `baseline`, which records it only if the generated `.verify.sql` finds the exact 97 columns, 22 indexes and 20 constraints.
+- **Tests:**
+
+  | Check | Result |
+  |---|---|
+  | `npx vitest run` | 671/671 (new `src/database/connection-config.spec.ts`: 19) |
+  | `test/live/migrator-live.mjs` | 29/29 |
+  | `tsc -p tsconfig.build.json` | 0 errors |
+  | `npm run build` | ok; the database's table count was unchanged and no history table was created |
+  | API start-up | no schema change |
+
+### Batch 33 follow-up (2026-10-28): fixes from the migration security audit
+
+All local; nothing was run on production, deployed, committed or pushed. See `database/README.md`.
+
+- **Arguments** (`scripts/db/cli-args.mjs`): strict parsing.
+  - Unknown flags, `--dry-run=<value>`, misspellings, repeated flags and stray arguments are refused, as is `--dry-run` together with `--confirm-target`. Every refusal exits 2 before any configuration is read or any database contacted.
+  - The env-file flag is now `--target-env-file`, because Node 24 itself inspects `--env-file`.
+- **Confirmation:** **every** write (`run`, `baseline`) needs `--confirm-target=<database>@<host>:<port>` matching the resolved target, local databases included. It is checked before connecting. After connecting, `current_database()` must match too.
+- **Baseline:**
+  - The executable `.verify.sql` is replaced by a data-only `<migration>.schema.json`, pinned by SHA-256 in the migration file (`-- schema-snapshot-sha256:`).
+  - The runner compares it using built-in catalogue `SELECT`s in a `READ ONLY` transaction, exactly: no case folding and no parenthesis stripping. It covers tables (kind, persistence, partition), columns (type, NOT NULL, default, identity, generated, collation), indexes (structure and predicate), constraints (structure and exact CHECK text) and user triggers.
+  - RLS and policies are reported only. Grants, ownership, operator classes and storage settings are documented as not verified.
+  - The recording transaction takes ACCESS SHARE locks and confirms the schema is unchanged since verification.
+- **Transaction safety:**
+  - A SQL lexer (`scripts/db/sql-lexer.mjs`) handles comments (nested), strings, `E''` strings, quoted identifiers and dollar quotes. Every statement that would begin, end, abort, chain or alter the transaction is refused before anything runs.
+  - Statements run one at a time through the extended protocol, which PostgreSQL limits to one statement each.
+  - The transaction id is checked before the history row is written.
+- **Checksum race:** under the lock, a recorded version with a different checksum is an error, never a skip.
+- **Target isolation:**
+  - A blank or invalid `MIGRATION_DATABASE_URL` fails instead of falling back.
+  - Strict mode (`--strict-target` / `MIGRATION_STRICT_TARGET=true`) requires `MIGRATION_DATABASE_URL`.
+  - `--target-env-file` must exist and alone decides all target variables.
+- **TLS:** for non-local hosts, certificates are verified (`rejectUnauthorized: true`, optional `MIGRATION_DATABASE_SSL_ROOT_CERT`). Weakening URL parameters (`sslmode` other than `verify-full`, `ssl`, `sslrootcert`, …) are refused and stripped, with no plain-text fallback. The API's own connection settings are unchanged.
+- **History table:** `public.schema_migrations`, created inside the first migration's or the baseline's transaction, so a failure leaves no empty table. `status` and dry runs never create it.
+- **Tests:**
+
+  | Check | Result |
+  |---|---|
+  | `npx vitest run` | 728/728 (`src/database/*.spec.ts`: 76) |
+  | `node test/live/migrator-live.mjs` | 44/44 |
+  | `tsc -p tsconfig.build.json` | 0 errors |
+  | `oxlint` on the new files | clean |
+  | `npm run build` | ok |
+  | API start-up on the local dev database | no schema change |

@@ -1,0 +1,1860 @@
+{
+  "format": 1,
+  "migration": "20261028000000",
+  "generatedBy": "scripts/db/make-snapshot.mjs",
+  "generatedOnServerVersionNum": 180006,
+  "tableNames": [
+    "user_avatars",
+    "personal_courses",
+    "personal_course_modules",
+    "learner_materials",
+    "learning_resources",
+    "learner_assessments",
+    "assessment_attempts",
+    "youtube_session_messages"
+  ],
+  "notVerified": [
+    "row level security (relrowsecurity / relforcerowsecurity) and policies — reported only",
+    "grants, default privileges and ownership",
+    "index operator classes and per-column index collations",
+    "table/index storage parameters, tablespaces, comments, statistics targets",
+    "row contents (a baseline never reads data)"
+  ],
+  "verified": {
+    "tables": [
+      {
+        "table": "assessment_attempts",
+        "kind": "r",
+        "persistence": "p",
+        "partition": false
+      },
+      {
+        "table": "learner_assessments",
+        "kind": "r",
+        "persistence": "p",
+        "partition": false
+      },
+      {
+        "table": "learner_materials",
+        "kind": "r",
+        "persistence": "p",
+        "partition": false
+      },
+      {
+        "table": "learning_resources",
+        "kind": "r",
+        "persistence": "p",
+        "partition": false
+      },
+      {
+        "table": "personal_course_modules",
+        "kind": "r",
+        "persistence": "p",
+        "partition": false
+      },
+      {
+        "table": "personal_courses",
+        "kind": "r",
+        "persistence": "p",
+        "partition": false
+      },
+      {
+        "table": "user_avatars",
+        "kind": "r",
+        "persistence": "p",
+        "partition": false
+      },
+      {
+        "table": "youtube_session_messages",
+        "kind": "r",
+        "persistence": "p",
+        "partition": false
+      }
+    ],
+    "columns": [
+      {
+        "table": "assessment_attempts",
+        "column": "answers",
+        "type": "jsonb",
+        "not_null": true,
+        "default": "'{}'::jsonb",
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "assessment_attempts",
+        "column": "assessmentId",
+        "type": "uuid",
+        "not_null": true,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "assessment_attempts",
+        "column": "autoSubmitted",
+        "type": "boolean",
+        "not_null": true,
+        "default": "false",
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "assessment_attempts",
+        "column": "correctCount",
+        "type": "integer",
+        "not_null": false,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "assessment_attempts",
+        "column": "deadlineAt",
+        "type": "timestamp with time zone",
+        "not_null": false,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "assessment_attempts",
+        "column": "id",
+        "type": "uuid",
+        "not_null": true,
+        "default": "gen_random_uuid()",
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "assessment_attempts",
+        "column": "review",
+        "type": "jsonb",
+        "not_null": false,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "assessment_attempts",
+        "column": "score",
+        "type": "integer",
+        "not_null": false,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "assessment_attempts",
+        "column": "startedAt",
+        "type": "timestamp with time zone",
+        "not_null": true,
+        "default": "now()",
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "assessment_attempts",
+        "column": "status",
+        "type": "character varying(15)",
+        "not_null": true,
+        "default": "'in_progress'::character varying",
+        "identity": "",
+        "generated": "",
+        "collation": "default"
+      },
+      {
+        "table": "assessment_attempts",
+        "column": "submittedAt",
+        "type": "timestamp with time zone",
+        "not_null": false,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "assessment_attempts",
+        "column": "totalQuestions",
+        "type": "integer",
+        "not_null": true,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "assessment_attempts",
+        "column": "updatedAt",
+        "type": "timestamp with time zone",
+        "not_null": true,
+        "default": "now()",
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "assessment_attempts",
+        "column": "userId",
+        "type": "uuid",
+        "not_null": true,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "learner_assessments",
+        "column": "createdAt",
+        "type": "timestamp with time zone",
+        "not_null": true,
+        "default": "now()",
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "learner_assessments",
+        "column": "difficulty",
+        "type": "character varying(10)",
+        "not_null": false,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": "default"
+      },
+      {
+        "table": "learner_assessments",
+        "column": "durationMinutes",
+        "type": "integer",
+        "not_null": false,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "learner_assessments",
+        "column": "examType",
+        "type": "character varying(60)",
+        "not_null": false,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": "default"
+      },
+      {
+        "table": "learner_assessments",
+        "column": "feedbackMode",
+        "type": "character varying(20)",
+        "not_null": true,
+        "default": "'after_submit'::character varying",
+        "identity": "",
+        "generated": "",
+        "collation": "default"
+      },
+      {
+        "table": "learner_assessments",
+        "column": "id",
+        "type": "uuid",
+        "not_null": true,
+        "default": "gen_random_uuid()",
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "learner_assessments",
+        "column": "kind",
+        "type": "character varying(10)",
+        "not_null": true,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": "default"
+      },
+      {
+        "table": "learner_assessments",
+        "column": "materialId",
+        "type": "uuid",
+        "not_null": false,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "learner_assessments",
+        "column": "moduleId",
+        "type": "uuid",
+        "not_null": false,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "learner_assessments",
+        "column": "personalCourseId",
+        "type": "uuid",
+        "not_null": false,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "learner_assessments",
+        "column": "questions",
+        "type": "jsonb",
+        "not_null": true,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "learner_assessments",
+        "column": "requestId",
+        "type": "uuid",
+        "not_null": false,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "learner_assessments",
+        "column": "requestedCount",
+        "type": "integer",
+        "not_null": true,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "learner_assessments",
+        "column": "resourceId",
+        "type": "uuid",
+        "not_null": false,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "learner_assessments",
+        "column": "sourceType",
+        "type": "character varying(20)",
+        "not_null": true,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": "default"
+      },
+      {
+        "table": "learner_assessments",
+        "column": "title",
+        "type": "character varying(255)",
+        "not_null": true,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": "default"
+      },
+      {
+        "table": "learner_assessments",
+        "column": "truncated",
+        "type": "boolean",
+        "not_null": true,
+        "default": "false",
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "learner_assessments",
+        "column": "updatedAt",
+        "type": "timestamp with time zone",
+        "not_null": true,
+        "default": "now()",
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "learner_assessments",
+        "column": "userId",
+        "type": "uuid",
+        "not_null": true,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "learner_assessments",
+        "column": "youtubeSessionId",
+        "type": "uuid",
+        "not_null": false,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "learner_materials",
+        "column": "createdAt",
+        "type": "timestamp with time zone",
+        "not_null": true,
+        "default": "now()",
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "learner_materials",
+        "column": "extractedText",
+        "type": "text",
+        "not_null": false,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": "default"
+      },
+      {
+        "table": "learner_materials",
+        "column": "id",
+        "type": "uuid",
+        "not_null": true,
+        "default": "gen_random_uuid()",
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "learner_materials",
+        "column": "mimeType",
+        "type": "character varying(100)",
+        "not_null": true,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": "default"
+      },
+      {
+        "table": "learner_materials",
+        "column": "originalName",
+        "type": "character varying(255)",
+        "not_null": true,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": "default"
+      },
+      {
+        "table": "learner_materials",
+        "column": "personalCourseId",
+        "type": "uuid",
+        "not_null": false,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "learner_materials",
+        "column": "processingError",
+        "type": "text",
+        "not_null": false,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": "default"
+      },
+      {
+        "table": "learner_materials",
+        "column": "sizeBytes",
+        "type": "integer",
+        "not_null": true,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "learner_materials",
+        "column": "sourceType",
+        "type": "character varying(20)",
+        "not_null": true,
+        "default": "'upload'::character varying",
+        "identity": "",
+        "generated": "",
+        "collation": "default"
+      },
+      {
+        "table": "learner_materials",
+        "column": "status",
+        "type": "character varying(20)",
+        "not_null": true,
+        "default": "'READY'::character varying",
+        "identity": "",
+        "generated": "",
+        "collation": "default"
+      },
+      {
+        "table": "learner_materials",
+        "column": "storageKey",
+        "type": "character varying(500)",
+        "not_null": false,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": "default"
+      },
+      {
+        "table": "learner_materials",
+        "column": "textChars",
+        "type": "integer",
+        "not_null": true,
+        "default": "0",
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "learner_materials",
+        "column": "updatedAt",
+        "type": "timestamp with time zone",
+        "not_null": true,
+        "default": "now()",
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "learner_materials",
+        "column": "userId",
+        "type": "uuid",
+        "not_null": true,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "learning_resources",
+        "column": "completedAt",
+        "type": "timestamp with time zone",
+        "not_null": false,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "learning_resources",
+        "column": "content",
+        "type": "text",
+        "not_null": true,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": "default"
+      },
+      {
+        "table": "learning_resources",
+        "column": "createdAt",
+        "type": "timestamp with time zone",
+        "not_null": true,
+        "default": "now()",
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "learning_resources",
+        "column": "id",
+        "type": "uuid",
+        "not_null": true,
+        "default": "gen_random_uuid()",
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "learning_resources",
+        "column": "kind",
+        "type": "character varying(30)",
+        "not_null": true,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": "default"
+      },
+      {
+        "table": "learning_resources",
+        "column": "materialId",
+        "type": "uuid",
+        "not_null": false,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "learning_resources",
+        "column": "moduleId",
+        "type": "uuid",
+        "not_null": false,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "learning_resources",
+        "column": "options",
+        "type": "jsonb",
+        "not_null": true,
+        "default": "'{}'::jsonb",
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "learning_resources",
+        "column": "personalCourseId",
+        "type": "uuid",
+        "not_null": false,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "learning_resources",
+        "column": "requestId",
+        "type": "uuid",
+        "not_null": false,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "learning_resources",
+        "column": "sourceType",
+        "type": "character varying(20)",
+        "not_null": true,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": "default"
+      },
+      {
+        "table": "learning_resources",
+        "column": "title",
+        "type": "character varying(255)",
+        "not_null": true,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": "default"
+      },
+      {
+        "table": "learning_resources",
+        "column": "truncated",
+        "type": "boolean",
+        "not_null": true,
+        "default": "false",
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "learning_resources",
+        "column": "updatedAt",
+        "type": "timestamp with time zone",
+        "not_null": true,
+        "default": "now()",
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "learning_resources",
+        "column": "userId",
+        "type": "uuid",
+        "not_null": true,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "learning_resources",
+        "column": "youtubeSessionId",
+        "type": "uuid",
+        "not_null": false,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "personal_course_modules",
+        "column": "courseId",
+        "type": "uuid",
+        "not_null": true,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "personal_course_modules",
+        "column": "createdAt",
+        "type": "timestamp with time zone",
+        "not_null": true,
+        "default": "now()",
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "personal_course_modules",
+        "column": "id",
+        "type": "uuid",
+        "not_null": true,
+        "default": "gen_random_uuid()",
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "personal_course_modules",
+        "column": "isCompleted",
+        "type": "boolean",
+        "not_null": true,
+        "default": "false",
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "personal_course_modules",
+        "column": "notes",
+        "type": "text",
+        "not_null": false,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": "default"
+      },
+      {
+        "table": "personal_course_modules",
+        "column": "position",
+        "type": "integer",
+        "not_null": true,
+        "default": "0",
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "personal_course_modules",
+        "column": "title",
+        "type": "character varying(200)",
+        "not_null": true,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": "default"
+      },
+      {
+        "table": "personal_course_modules",
+        "column": "updatedAt",
+        "type": "timestamp with time zone",
+        "not_null": true,
+        "default": "now()",
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "personal_course_modules",
+        "column": "userId",
+        "type": "uuid",
+        "not_null": true,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "personal_courses",
+        "column": "archivedAt",
+        "type": "timestamp with time zone",
+        "not_null": false,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "personal_courses",
+        "column": "createdAt",
+        "type": "timestamp with time zone",
+        "not_null": true,
+        "default": "now()",
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "personal_courses",
+        "column": "description",
+        "type": "text",
+        "not_null": false,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": "default"
+      },
+      {
+        "table": "personal_courses",
+        "column": "examGoals",
+        "type": "jsonb",
+        "not_null": true,
+        "default": "'[]'::jsonb",
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "personal_courses",
+        "column": "id",
+        "type": "uuid",
+        "not_null": true,
+        "default": "gen_random_uuid()",
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "personal_courses",
+        "column": "level",
+        "type": "character varying(100)",
+        "not_null": false,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": "default"
+      },
+      {
+        "table": "personal_courses",
+        "column": "objectives",
+        "type": "jsonb",
+        "not_null": true,
+        "default": "'[]'::jsonb",
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "personal_courses",
+        "column": "subjects",
+        "type": "jsonb",
+        "not_null": true,
+        "default": "'[]'::jsonb",
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "personal_courses",
+        "column": "title",
+        "type": "character varying(200)",
+        "not_null": true,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": "default"
+      },
+      {
+        "table": "personal_courses",
+        "column": "updatedAt",
+        "type": "timestamp with time zone",
+        "not_null": true,
+        "default": "now()",
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "personal_courses",
+        "column": "userId",
+        "type": "uuid",
+        "not_null": true,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "user_avatars",
+        "column": "kind",
+        "type": "character varying(10)",
+        "not_null": true,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": "default"
+      },
+      {
+        "table": "user_avatars",
+        "column": "mimeType",
+        "type": "character varying(50)",
+        "not_null": false,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": "default"
+      },
+      {
+        "table": "user_avatars",
+        "column": "presetId",
+        "type": "character varying(40)",
+        "not_null": false,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": "default"
+      },
+      {
+        "table": "user_avatars",
+        "column": "storageKey",
+        "type": "character varying(500)",
+        "not_null": false,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": "default"
+      },
+      {
+        "table": "user_avatars",
+        "column": "updatedAt",
+        "type": "timestamp with time zone",
+        "not_null": true,
+        "default": "now()",
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "user_avatars",
+        "column": "userId",
+        "type": "uuid",
+        "not_null": true,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "youtube_session_messages",
+        "column": "citations",
+        "type": "jsonb",
+        "not_null": true,
+        "default": "'[]'::jsonb",
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "youtube_session_messages",
+        "column": "content",
+        "type": "text",
+        "not_null": true,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": "default"
+      },
+      {
+        "table": "youtube_session_messages",
+        "column": "createdAt",
+        "type": "timestamp with time zone",
+        "not_null": true,
+        "default": "now()",
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "youtube_session_messages",
+        "column": "id",
+        "type": "uuid",
+        "not_null": true,
+        "default": "gen_random_uuid()",
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "youtube_session_messages",
+        "column": "role",
+        "type": "character varying(10)",
+        "not_null": true,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": "default"
+      },
+      {
+        "table": "youtube_session_messages",
+        "column": "sessionId",
+        "type": "uuid",
+        "not_null": true,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": null
+      },
+      {
+        "table": "youtube_session_messages",
+        "column": "userId",
+        "type": "uuid",
+        "not_null": true,
+        "default": null,
+        "identity": "",
+        "generated": "",
+        "collation": null
+      }
+    ],
+    "indexes": [
+      {
+        "table": "assessment_attempts",
+        "index": "IDX_assessment_attempts_assessment",
+        "method": "btree",
+        "unique": false,
+        "primary": false,
+        "key_columns": 1,
+        "all_columns": 1,
+        "columns": [
+          "assessmentId"
+        ],
+        "options": [
+          0
+        ],
+        "expressions": null,
+        "predicate": null,
+        "valid": true
+      },
+      {
+        "table": "assessment_attempts",
+        "index": "IDX_assessment_attempts_user",
+        "method": "btree",
+        "unique": false,
+        "primary": false,
+        "key_columns": 2,
+        "all_columns": 2,
+        "columns": [
+          "userId",
+          "startedAt"
+        ],
+        "options": [
+          0,
+          3
+        ],
+        "expressions": null,
+        "predicate": null,
+        "valid": true
+      },
+      {
+        "table": "assessment_attempts",
+        "index": "UQ_assessment_attempts_open",
+        "method": "btree",
+        "unique": true,
+        "primary": false,
+        "key_columns": 2,
+        "all_columns": 2,
+        "columns": [
+          "userId",
+          "assessmentId"
+        ],
+        "options": [
+          0,
+          0
+        ],
+        "expressions": null,
+        "predicate": "((status)::text = 'in_progress'::text)",
+        "valid": true
+      },
+      {
+        "table": "assessment_attempts",
+        "index": "assessment_attempts_pkey",
+        "method": "btree",
+        "unique": true,
+        "primary": true,
+        "key_columns": 1,
+        "all_columns": 1,
+        "columns": [
+          "id"
+        ],
+        "options": [
+          0
+        ],
+        "expressions": null,
+        "predicate": null,
+        "valid": true
+      },
+      {
+        "table": "learner_assessments",
+        "index": "IDX_learner_assessments_course",
+        "method": "btree",
+        "unique": false,
+        "primary": false,
+        "key_columns": 1,
+        "all_columns": 1,
+        "columns": [
+          "personalCourseId"
+        ],
+        "options": [
+          0
+        ],
+        "expressions": null,
+        "predicate": null,
+        "valid": true
+      },
+      {
+        "table": "learner_assessments",
+        "index": "IDX_learner_assessments_user",
+        "method": "btree",
+        "unique": false,
+        "primary": false,
+        "key_columns": 3,
+        "all_columns": 3,
+        "columns": [
+          "userId",
+          "kind",
+          "createdAt"
+        ],
+        "options": [
+          0,
+          0,
+          3
+        ],
+        "expressions": null,
+        "predicate": null,
+        "valid": true
+      },
+      {
+        "table": "learner_assessments",
+        "index": "UQ_learner_assessments_request",
+        "method": "btree",
+        "unique": true,
+        "primary": false,
+        "key_columns": 2,
+        "all_columns": 2,
+        "columns": [
+          "userId",
+          "requestId"
+        ],
+        "options": [
+          0,
+          0
+        ],
+        "expressions": null,
+        "predicate": "(\"requestId\" IS NOT NULL)",
+        "valid": true
+      },
+      {
+        "table": "learner_assessments",
+        "index": "learner_assessments_pkey",
+        "method": "btree",
+        "unique": true,
+        "primary": true,
+        "key_columns": 1,
+        "all_columns": 1,
+        "columns": [
+          "id"
+        ],
+        "options": [
+          0
+        ],
+        "expressions": null,
+        "predicate": null,
+        "valid": true
+      },
+      {
+        "table": "learner_materials",
+        "index": "IDX_learner_materials_course",
+        "method": "btree",
+        "unique": false,
+        "primary": false,
+        "key_columns": 1,
+        "all_columns": 1,
+        "columns": [
+          "personalCourseId"
+        ],
+        "options": [
+          0
+        ],
+        "expressions": null,
+        "predicate": null,
+        "valid": true
+      },
+      {
+        "table": "learner_materials",
+        "index": "IDX_learner_materials_userId",
+        "method": "btree",
+        "unique": false,
+        "primary": false,
+        "key_columns": 1,
+        "all_columns": 1,
+        "columns": [
+          "userId"
+        ],
+        "options": [
+          0
+        ],
+        "expressions": null,
+        "predicate": null,
+        "valid": true
+      },
+      {
+        "table": "learner_materials",
+        "index": "learner_materials_pkey",
+        "method": "btree",
+        "unique": true,
+        "primary": true,
+        "key_columns": 1,
+        "all_columns": 1,
+        "columns": [
+          "id"
+        ],
+        "options": [
+          0
+        ],
+        "expressions": null,
+        "predicate": null,
+        "valid": true
+      },
+      {
+        "table": "learning_resources",
+        "index": "IDX_learning_resources_course",
+        "method": "btree",
+        "unique": false,
+        "primary": false,
+        "key_columns": 1,
+        "all_columns": 1,
+        "columns": [
+          "personalCourseId"
+        ],
+        "options": [
+          0
+        ],
+        "expressions": null,
+        "predicate": null,
+        "valid": true
+      },
+      {
+        "table": "learning_resources",
+        "index": "IDX_learning_resources_user",
+        "method": "btree",
+        "unique": false,
+        "primary": false,
+        "key_columns": 2,
+        "all_columns": 2,
+        "columns": [
+          "userId",
+          "createdAt"
+        ],
+        "options": [
+          0,
+          3
+        ],
+        "expressions": null,
+        "predicate": null,
+        "valid": true
+      },
+      {
+        "table": "learning_resources",
+        "index": "UQ_learning_resources_request",
+        "method": "btree",
+        "unique": true,
+        "primary": false,
+        "key_columns": 2,
+        "all_columns": 2,
+        "columns": [
+          "userId",
+          "requestId"
+        ],
+        "options": [
+          0,
+          0
+        ],
+        "expressions": null,
+        "predicate": "(\"requestId\" IS NOT NULL)",
+        "valid": true
+      },
+      {
+        "table": "learning_resources",
+        "index": "learning_resources_pkey",
+        "method": "btree",
+        "unique": true,
+        "primary": true,
+        "key_columns": 1,
+        "all_columns": 1,
+        "columns": [
+          "id"
+        ],
+        "options": [
+          0
+        ],
+        "expressions": null,
+        "predicate": null,
+        "valid": true
+      },
+      {
+        "table": "personal_course_modules",
+        "index": "IDX_personal_course_modules_courseId",
+        "method": "btree",
+        "unique": false,
+        "primary": false,
+        "key_columns": 1,
+        "all_columns": 1,
+        "columns": [
+          "courseId"
+        ],
+        "options": [
+          0
+        ],
+        "expressions": null,
+        "predicate": null,
+        "valid": true
+      },
+      {
+        "table": "personal_course_modules",
+        "index": "personal_course_modules_pkey",
+        "method": "btree",
+        "unique": true,
+        "primary": true,
+        "key_columns": 1,
+        "all_columns": 1,
+        "columns": [
+          "id"
+        ],
+        "options": [
+          0
+        ],
+        "expressions": null,
+        "predicate": null,
+        "valid": true
+      },
+      {
+        "table": "personal_courses",
+        "index": "IDX_personal_courses_userId",
+        "method": "btree",
+        "unique": false,
+        "primary": false,
+        "key_columns": 1,
+        "all_columns": 1,
+        "columns": [
+          "userId"
+        ],
+        "options": [
+          0
+        ],
+        "expressions": null,
+        "predicate": null,
+        "valid": true
+      },
+      {
+        "table": "personal_courses",
+        "index": "personal_courses_pkey",
+        "method": "btree",
+        "unique": true,
+        "primary": true,
+        "key_columns": 1,
+        "all_columns": 1,
+        "columns": [
+          "id"
+        ],
+        "options": [
+          0
+        ],
+        "expressions": null,
+        "predicate": null,
+        "valid": true
+      },
+      {
+        "table": "user_avatars",
+        "index": "user_avatars_pkey",
+        "method": "btree",
+        "unique": true,
+        "primary": true,
+        "key_columns": 1,
+        "all_columns": 1,
+        "columns": [
+          "userId"
+        ],
+        "options": [
+          0
+        ],
+        "expressions": null,
+        "predicate": null,
+        "valid": true
+      },
+      {
+        "table": "youtube_session_messages",
+        "index": "IDX_youtube_session_messages_session",
+        "method": "btree",
+        "unique": false,
+        "primary": false,
+        "key_columns": 2,
+        "all_columns": 2,
+        "columns": [
+          "sessionId",
+          "createdAt"
+        ],
+        "options": [
+          0,
+          0
+        ],
+        "expressions": null,
+        "predicate": null,
+        "valid": true
+      },
+      {
+        "table": "youtube_session_messages",
+        "index": "youtube_session_messages_pkey",
+        "method": "btree",
+        "unique": true,
+        "primary": true,
+        "key_columns": 1,
+        "all_columns": 1,
+        "columns": [
+          "id"
+        ],
+        "options": [
+          0
+        ],
+        "expressions": null,
+        "predicate": null,
+        "valid": true
+      }
+    ],
+    "constraints": [
+      {
+        "table": "assessment_attempts",
+        "name": "assessment_attempts_assessmentId_fkey",
+        "type": "f",
+        "columns": [
+          "assessmentId"
+        ],
+        "ref_schema": "public",
+        "ref_table": "learner_assessments",
+        "ref_columns": [
+          "id"
+        ],
+        "on_delete": "c",
+        "on_update": "a",
+        "match": "s",
+        "deferrable": false,
+        "deferred": false,
+        "validated": true,
+        "expression": null,
+        "index": "learner_assessments_pkey"
+      },
+      {
+        "table": "assessment_attempts",
+        "name": "assessment_attempts_pkey",
+        "type": "p",
+        "columns": [
+          "id"
+        ],
+        "ref_schema": null,
+        "ref_table": null,
+        "ref_columns": [],
+        "on_delete": null,
+        "on_update": null,
+        "match": null,
+        "deferrable": false,
+        "deferred": false,
+        "validated": true,
+        "expression": null,
+        "index": "assessment_attempts_pkey"
+      },
+      {
+        "table": "assessment_attempts",
+        "name": "assessment_attempts_status_check",
+        "type": "c",
+        "columns": [
+          "status"
+        ],
+        "ref_schema": null,
+        "ref_table": null,
+        "ref_columns": [],
+        "on_delete": null,
+        "on_update": null,
+        "match": null,
+        "deferrable": false,
+        "deferred": false,
+        "validated": true,
+        "expression": "((status)::text = ANY ((ARRAY['in_progress'::character varying, 'submitted'::character varying])::text[]))",
+        "index": null
+      },
+      {
+        "table": "learner_assessments",
+        "name": "learner_assessments_kind_check",
+        "type": "c",
+        "columns": [
+          "kind"
+        ],
+        "ref_schema": null,
+        "ref_table": null,
+        "ref_columns": [],
+        "on_delete": null,
+        "on_update": null,
+        "match": null,
+        "deferrable": false,
+        "deferred": false,
+        "validated": true,
+        "expression": "((kind)::text = ANY ((ARRAY['quiz'::character varying, 'exam'::character varying])::text[]))",
+        "index": null
+      },
+      {
+        "table": "learner_assessments",
+        "name": "learner_assessments_materialId_fkey",
+        "type": "f",
+        "columns": [
+          "materialId"
+        ],
+        "ref_schema": "public",
+        "ref_table": "learner_materials",
+        "ref_columns": [
+          "id"
+        ],
+        "on_delete": "n",
+        "on_update": "a",
+        "match": "s",
+        "deferrable": false,
+        "deferred": false,
+        "validated": true,
+        "expression": null,
+        "index": "learner_materials_pkey"
+      },
+      {
+        "table": "learner_assessments",
+        "name": "learner_assessments_moduleId_fkey",
+        "type": "f",
+        "columns": [
+          "moduleId"
+        ],
+        "ref_schema": "public",
+        "ref_table": "personal_course_modules",
+        "ref_columns": [
+          "id"
+        ],
+        "on_delete": "n",
+        "on_update": "a",
+        "match": "s",
+        "deferrable": false,
+        "deferred": false,
+        "validated": true,
+        "expression": null,
+        "index": "personal_course_modules_pkey"
+      },
+      {
+        "table": "learner_assessments",
+        "name": "learner_assessments_personalCourseId_fkey",
+        "type": "f",
+        "columns": [
+          "personalCourseId"
+        ],
+        "ref_schema": "public",
+        "ref_table": "personal_courses",
+        "ref_columns": [
+          "id"
+        ],
+        "on_delete": "n",
+        "on_update": "a",
+        "match": "s",
+        "deferrable": false,
+        "deferred": false,
+        "validated": true,
+        "expression": null,
+        "index": "personal_courses_pkey"
+      },
+      {
+        "table": "learner_assessments",
+        "name": "learner_assessments_pkey",
+        "type": "p",
+        "columns": [
+          "id"
+        ],
+        "ref_schema": null,
+        "ref_table": null,
+        "ref_columns": [],
+        "on_delete": null,
+        "on_update": null,
+        "match": null,
+        "deferrable": false,
+        "deferred": false,
+        "validated": true,
+        "expression": null,
+        "index": "learner_assessments_pkey"
+      },
+      {
+        "table": "learner_assessments",
+        "name": "learner_assessments_resourceId_fkey",
+        "type": "f",
+        "columns": [
+          "resourceId"
+        ],
+        "ref_schema": "public",
+        "ref_table": "learning_resources",
+        "ref_columns": [
+          "id"
+        ],
+        "on_delete": "n",
+        "on_update": "a",
+        "match": "s",
+        "deferrable": false,
+        "deferred": false,
+        "validated": true,
+        "expression": null,
+        "index": "learning_resources_pkey"
+      },
+      {
+        "table": "learner_materials",
+        "name": "learner_materials_pkey",
+        "type": "p",
+        "columns": [
+          "id"
+        ],
+        "ref_schema": null,
+        "ref_table": null,
+        "ref_columns": [],
+        "on_delete": null,
+        "on_update": null,
+        "match": null,
+        "deferrable": false,
+        "deferred": false,
+        "validated": true,
+        "expression": null,
+        "index": "learner_materials_pkey"
+      },
+      {
+        "table": "learning_resources",
+        "name": "learning_resources_materialId_fkey",
+        "type": "f",
+        "columns": [
+          "materialId"
+        ],
+        "ref_schema": "public",
+        "ref_table": "learner_materials",
+        "ref_columns": [
+          "id"
+        ],
+        "on_delete": "n",
+        "on_update": "a",
+        "match": "s",
+        "deferrable": false,
+        "deferred": false,
+        "validated": true,
+        "expression": null,
+        "index": "learner_materials_pkey"
+      },
+      {
+        "table": "learning_resources",
+        "name": "learning_resources_moduleId_fkey",
+        "type": "f",
+        "columns": [
+          "moduleId"
+        ],
+        "ref_schema": "public",
+        "ref_table": "personal_course_modules",
+        "ref_columns": [
+          "id"
+        ],
+        "on_delete": "n",
+        "on_update": "a",
+        "match": "s",
+        "deferrable": false,
+        "deferred": false,
+        "validated": true,
+        "expression": null,
+        "index": "personal_course_modules_pkey"
+      },
+      {
+        "table": "learning_resources",
+        "name": "learning_resources_personalCourseId_fkey",
+        "type": "f",
+        "columns": [
+          "personalCourseId"
+        ],
+        "ref_schema": "public",
+        "ref_table": "personal_courses",
+        "ref_columns": [
+          "id"
+        ],
+        "on_delete": "n",
+        "on_update": "a",
+        "match": "s",
+        "deferrable": false,
+        "deferred": false,
+        "validated": true,
+        "expression": null,
+        "index": "personal_courses_pkey"
+      },
+      {
+        "table": "learning_resources",
+        "name": "learning_resources_pkey",
+        "type": "p",
+        "columns": [
+          "id"
+        ],
+        "ref_schema": null,
+        "ref_table": null,
+        "ref_columns": [],
+        "on_delete": null,
+        "on_update": null,
+        "match": null,
+        "deferrable": false,
+        "deferred": false,
+        "validated": true,
+        "expression": null,
+        "index": "learning_resources_pkey"
+      },
+      {
+        "table": "personal_course_modules",
+        "name": "personal_course_modules_pkey",
+        "type": "p",
+        "columns": [
+          "id"
+        ],
+        "ref_schema": null,
+        "ref_table": null,
+        "ref_columns": [],
+        "on_delete": null,
+        "on_update": null,
+        "match": null,
+        "deferrable": false,
+        "deferred": false,
+        "validated": true,
+        "expression": null,
+        "index": "personal_course_modules_pkey"
+      },
+      {
+        "table": "personal_courses",
+        "name": "personal_courses_pkey",
+        "type": "p",
+        "columns": [
+          "id"
+        ],
+        "ref_schema": null,
+        "ref_table": null,
+        "ref_columns": [],
+        "on_delete": null,
+        "on_update": null,
+        "match": null,
+        "deferrable": false,
+        "deferred": false,
+        "validated": true,
+        "expression": null,
+        "index": "personal_courses_pkey"
+      },
+      {
+        "table": "user_avatars",
+        "name": "CHK_user_avatars_kind",
+        "type": "c",
+        "columns": [
+          "kind"
+        ],
+        "ref_schema": null,
+        "ref_table": null,
+        "ref_columns": [],
+        "on_delete": null,
+        "on_update": null,
+        "match": null,
+        "deferrable": false,
+        "deferred": false,
+        "validated": true,
+        "expression": "((kind)::text = ANY ((ARRAY['preset'::character varying, 'upload'::character varying])::text[]))",
+        "index": null
+      },
+      {
+        "table": "user_avatars",
+        "name": "user_avatars_pkey",
+        "type": "p",
+        "columns": [
+          "userId"
+        ],
+        "ref_schema": null,
+        "ref_table": null,
+        "ref_columns": [],
+        "on_delete": null,
+        "on_update": null,
+        "match": null,
+        "deferrable": false,
+        "deferred": false,
+        "validated": true,
+        "expression": null,
+        "index": "user_avatars_pkey"
+      },
+      {
+        "table": "youtube_session_messages",
+        "name": "youtube_session_messages_pkey",
+        "type": "p",
+        "columns": [
+          "id"
+        ],
+        "ref_schema": null,
+        "ref_table": null,
+        "ref_columns": [],
+        "on_delete": null,
+        "on_update": null,
+        "match": null,
+        "deferrable": false,
+        "deferred": false,
+        "validated": true,
+        "expression": null,
+        "index": "youtube_session_messages_pkey"
+      },
+      {
+        "table": "youtube_session_messages",
+        "name": "youtube_session_messages_role_check",
+        "type": "c",
+        "columns": [
+          "role"
+        ],
+        "ref_schema": null,
+        "ref_table": null,
+        "ref_columns": [],
+        "on_delete": null,
+        "on_update": null,
+        "match": null,
+        "deferrable": false,
+        "deferred": false,
+        "validated": true,
+        "expression": "((role)::text = ANY ((ARRAY['user'::character varying, 'assistant'::character varying])::text[]))",
+        "index": null
+      }
+    ],
+    "triggers": []
+  }
+}

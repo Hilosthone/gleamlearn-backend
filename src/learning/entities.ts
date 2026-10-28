@@ -7,7 +7,8 @@ import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateCol
 
 export const TEXT_RESOURCE_KINDS = ['lesson', 'summary', 'notes', 'study_plan', 'key_concepts', 'explanation'] as const;
 export type TextResourceKind = (typeof TEXT_RESOURCE_KINDS)[number];
-export const SOURCE_TYPES = ['material', 'text', 'course', 'module', 'resource', 'youtube', 'note'] as const;
+/** 'topic': a short topic the learner names, taught from general knowledge (visual lessons). */
+export const SOURCE_TYPES = ['material', 'text', 'course', 'module', 'resource', 'youtube', 'note', 'topic'] as const;
 export type SourceType = (typeof SOURCE_TYPES)[number];
 
 /** A generated lesson, summary, notes, study plan, key concepts or explanation. */
@@ -25,7 +26,8 @@ export class LearningResource {
 
   /** A text kind, or 'flashcards' / 'course_plan' (records of what was created: a deck, or course modules). */
   @Column({ type: 'varchar', length: 30 })
-  kind: TextResourceKind | 'flashcards' | 'course_plan';
+  /** visual_lesson: content is the validated JSON lesson (src/learning/visual-lesson.ts) */
+  kind: TextResourceKind | 'flashcards' | 'course_plan' | 'visual_lesson';
 
   @Column({ type: 'varchar', length: 255 })
   title: string;
