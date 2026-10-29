@@ -1,4 +1,5 @@
 // src/admin/dashboard/dashboard.service.ts
+import { featureUnavailable } from '../../common/errors/feature-unavailable.js';
 import { Injectable } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository, MoreThan, type EntityTarget, type ObjectLiteral } from 'typeorm';
@@ -69,41 +70,17 @@ export class DashboardService {
   }
 
   async getOverview() {
+    // Only what is counted. Activity, premium, learning and revenue figures used to be guesses (DAU = 15% of all
+    // users) or zeros; GET /admin/dashboard/counts has the verified catalogue and learner counts.
     const totalUsers = await this.userRepo.count();
     const recentDate = new Date();
     recentDate.setDate(recentDate.getDate() - 30);
-
-    const newUsersCount = await this.userRepo.count({
-      where: { createdAt: MoreThan(recentDate) },
-    });
-
+    const newUsersCount = await this.userRepo.count({ where: { createdAt: MoreThan(recentDate) } });
     return {
       status: 'success',
       data: {
-        users: {
-          total: totalUsers,
-          active: totalUsers,
-          new: newUsersCount,
-          suspended: 0,
-          deleted: 0,
-          premium: 0,
-          dau: Math.round(totalUsers * 0.15),
-          mau: Math.round(totalUsers * 0.60),
-        },
-        learning: {
-          totalCourses: 0,
-          totalQuizzes: 0,
-          totalTests: 0,
-          totalExams: 0,
-          totalAiSessions: 0,
-          totalStudyHours: 0,
-          xpGenerated: 0,
-          coinsGenerated: 0,
-        },
-        revenue: {
-          totalRevenue: 0.00,
-          currency: 'USD',
-        },
+        users: { total: totalUsers, new: newUsersCount, dau: null, mau: null },
+        notMeasured: ['active users', 'suspended and deleted users', 'premium users', 'learning totals', 'revenue'],
       },
     };
   }
@@ -113,76 +90,22 @@ export class DashboardService {
     const recentDate = new Date();
     recentDate.setDate(recentDate.getDate() - 30);
     const newUsers = await this.userRepo.count({ where: { createdAt: MoreThan(recentDate) } });
-
-    return {
-      status: 'success',
-      data: {
-        totalUsers,
-        activeUsers: totalUsers,
-        newUsers,
-        suspendedUsers: 0,
-        deletedUsers: 0,
-        premiumUsers: 0,
-        dailyActiveUsers: Math.round(totalUsers * 0.15),
-        monthlyActiveUsers: Math.round(totalUsers * 0.60),
-      },
-    };
+    return { status: 'success', data: { totalUsers, newUsers, dailyActiveUsers: null, monthlyActiveUsers: null } };
   }
 
-  async getActivityMetrics() {
-    return {
-      status: 'success',
-      data: {
-        recentLogins: 124,
-        activeSessionsNow: 32,
-        peakConcurrentUsers: 85,
-        systemHealth: 'Optimal',
-      },
-    };
+  async getActivityMetrics(): Promise<never> {
+    throw featureUnavailable('Activity metrics', 'logins and sessions are not tracked (the previous figures were invented)');
   }
 
-  async getRevenueMetrics() {
-    return {
-      status: 'success',
-      data: {
-        totalRevenue: 0.00,
-        monthlyRecurringRevenue: 0.00,
-        subscriptionCounts: {
-          free: await this.userRepo.count(),
-          premiumMonthly: 0,
-          premiumAnnual: 0,
-        },
-      },
-    };
+  async getRevenueMetrics(): Promise<never> {
+    throw featureUnavailable('Revenue metrics', 'payments are not live');
   }
 
-  async getLearningMetrics() {
-    return {
-      status: 'success',
-      data: {
-        totalCourses: 0,
-        totalQuizzes: 0,
-        totalTests: 0,
-        totalExams: 0,
-        totalAiSessions: 0,
-        totalStudyHours: 0,
-        xpGenerated: 0,
-        coinsGenerated: 0,
-      },
-    };
+  async getLearningMetrics(): Promise<never> {
+    throw featureUnavailable('Learning metrics', 'use GET /admin/dashboard/counts for the verified counts');
   }
 
-  async getEngagementMetrics() {
-    const totalUsers = await this.userRepo.count();
-    return {
-      status: 'success',
-      data: {
-        dailyActiveUsers: Math.round(totalUsers * 0.15),
-        weeklyActiveUsers: Math.round(totalUsers * 0.35),
-        monthlyActiveUsers: Math.round(totalUsers * 0.60),
-        averageSessionDurationMinutes: 24.5,
-        completionRatePercentage: 78.2,
-      },
-    };
+  async getEngagementMetrics(): Promise<never> {
+    throw featureUnavailable('Engagement metrics', 'active users, session length and completion rate are not measured (the previous figures were invented)');
   }
 }

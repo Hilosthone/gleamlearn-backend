@@ -133,6 +133,7 @@
 
 // src/admin/users/users.service.ts
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { isMissingTable } from '../../common/errors/missing-table.js';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like } from 'typeorm';
 import { User } from '../../auth/entities/user.entity.js';
@@ -214,28 +215,56 @@ export class AdminUsersService {
   }
 
   async getProgress(id: string) {
+    // Counted from the learner's records (it used to be a fixed "0%"). A missing table counts as nothing.
     await this.ensureUserExists(id);
-    return { status: 'success', data: { userId: id, coursesCompleted: 0, quizzesPassed: 0, overallProgress: '0%' } };
+    const n = (sql: string) => this.count(sql, id);
+    return {
+      status: 'success',
+      data: {
+        userId: id,
+        coursesEnrolled: await n(`SELECT count(*) AS n FROM "enrollments" WHERE "userId" = $1`),
+        coursesCompleted: await n(`SELECT count(*) AS n FROM "enrollments" WHERE "userId" = $1 AND "progressPercentage" >= 100`),
+        lessonsCompleted: await n(`SELECT count(*) AS n FROM "lesson_progress" WHERE "userId" = $1::text AND "isCompleted"`),
+        officialAttemptsSubmitted: await n(`SELECT count(*) AS n FROM "official_assessment_attempts" WHERE "userId" = $1 AND "status" = 'submitted'`),
+        ownAssessmentsSubmitted: await n(`SELECT count(*) AS n FROM "assessment_attempts" WHERE "userId" = $1 AND "status" = 'submitted'`),
+        personalCourses: await n(`SELECT count(*) AS n FROM "personal_courses" WHERE "userId" = $1`),
+        generatedResources: await n(`SELECT count(*) AS n FROM "learning_resources" WHERE "userId" = $1`),
+        uploadedMaterials: await n(`SELECT count(*) AS n FROM "learner_materials" WHERE "userId" = $1`),
+      },
+    };
   }
 
   async getAnalytics(id: string) {
+    // Totals from the learner's XP, coin, streak and study-session records (they used to be fixed zeros).
     await this.ensureUserExists(id);
-    return { status: 'success', data: { userId: id, totalStudyHours: 0, xpEarned: 0, coinsEarned: 0 } };
+    const n = (sql: string) => this.count(sql, id);
+    const studySeconds = await n(`SELECT COALESCE(SUM("durationSeconds"), 0) AS n FROM "study_sessions" WHERE "userId" = $1::text`);
+    return {
+      status: 'success',
+      data: {
+        userId: id,
+        xpEarned: await n(`SELECT COALESCE(SUM(amount), 0) AS n FROM "xp_transactions" WHERE "userId" = $1`),
+        coinsBalance: await n(`SELECT COALESCE(SUM(amount), 0) AS n FROM "coin_transactions" WHERE user_id = $1`),
+        currentStreak: await n(`SELECT COALESCE(MAX("currentStreak"), 0) AS n FROM "user_streaks" WHERE "userId" = $1::text`),
+        longestStreak: await n(`SELECT COALESCE(MAX("longestStreak"), 0) AS n FROM "user_streaks" WHERE "userId" = $1::text`),
+        trackedStudyHours: Math.round((studySeconds / 3600) * 10) / 10,
+      },
+    };
   }
 
-  async suspendUser(id: string) {
+  async suspendUser(id: string, adminId?: string) {
     const user = await this.ensureUserExists(id);
     // Suspension uses the enforced restriction flag: sign-in is refused and existing tokens stop working
     await this.accountStatus.setRestricted(user.id, true, 'Suspended by an administrator');
-    await this.logAction(id, 'SUSPEND');
+    await this.logAction(id, 'SUSPEND', adminId);
     return { status: 'success', message: `User ${user.email} has been suspended.`, data: { userId: id, isRestricted: true } };
   }
 
-  async unsuspendUser(id: string) {
+  async unsuspendUser(id: string, adminId?: string) {
     const user = await this.ensureUserExists(id);
     // Lifts the restriction flag (this also lifts a restriction applied via /admin/users/:id/restrict)
     await this.accountStatus.setRestricted(user.id, false, null);
-    await this.logAction(id, 'UNSUSPEND');
+    await this.logAction(id, 'UNSUSPEND', adminId);
     return { status: 'success', message: `User ${user.email} has been unsuspended.`, data: { userId: id, isRestricted: false } };
   }
 
@@ -261,27 +290,27 @@ export class AdminUsersService {
     );
   }
 
-  async resetPassword(id: string, dto: AdminResetPasswordDto) {
+  async resetPassword(id: string, dto: AdminResetPasswordDto, adminId?: string) {
     const user = await this.ensureUserExists(id);
     user.passwordHash = await bcrypt.hash(dto.newPassword, 10);
     await this.userRepo.save(user);
-    await this.logAction(id, 'RESET_PASSWORD');
+    await this.logAction(id, 'RESET_PASSWORD', adminId);
     return { status: 'success', message: `Password for user ${user.email} has been reset by admin.` };
   }
 
-  async verifyUser(id: string) {
+  async verifyUser(id: string, adminId?: string) {
     const user = await this.ensureUserExists(id);
     user.isEmailVerified = true;
     await this.userRepo.save(user);
-    await this.logAction(id, 'VERIFY');
+    await this.logAction(id, 'VERIFY', adminId);
     return { status: 'success', message: `User ${user.email} has been manually verified.`, data: { userId: id, isEmailVerified: true } };
   }
 
-  async unverifyUser(id: string) {
+  async unverifyUser(id: string, adminId?: string) {
     const user = await this.ensureUserExists(id);
     user.isEmailVerified = false;
     await this.userRepo.save(user);
-    await this.logAction(id, 'UNVERIFY');
+    await this.logAction(id, 'UNVERIFY', adminId);
     return { status: 'success', message: `User ${user.email} verification has been revoked.`, data: { userId: id, isEmailVerified: false } };
   }
 
@@ -293,8 +322,28 @@ export class AdminUsersService {
     return user;
   }
 
-  private async logAction(targetUserId: string, actionType: string) {
-    const log = this.actionRepo.create({ targetUserId, actionType });
-    await this.actionRepo.save(log);
+  private async logAction(targetUserId: string, actionType: string, adminId?: string) {
+    await this.actionRepo.save(this.actionRepo.create({ targetUserId, actionType }));
+    // admin_user_actions has no admin column, so the action is also written to the audit log with who did it
+    if (adminId) {
+      try {
+        await this.userRepo.manager.query(
+        `INSERT INTO "admin_activity_logs" (admin_id, "userId", "category", "action", "target") VALUES ($1, $2, 'USERS', $3, $4)`,
+        [adminId, targetUserId, actionType, `User: ${targetUserId}`],
+        );
+      } catch {
+        // the user action itself already succeeded; a failing audit write must not undo or fail it
+      }
+    }
+  }
+
+  private async count(sql: string, id: string): Promise<number> {
+    try {
+      const rows = (await this.userRepo.manager.query(sql, [id])) as { n: string | number }[];
+      return Number(rows[0]?.n) || 0;
+    } catch (err) {
+      if (isMissingTable(err)) return 0;
+      throw err;
+    }
   }
 }

@@ -37,6 +37,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { Admin } from './entity/admin.entity.js';
 import { AdminAuthService } from './admin-auth.service.js';
 import { AdminAuthController } from './admin-auth.controller.js';
+import { AdminAccessController } from './admin-access.controller.js';
 import { AdminJwtStrategy } from './strategies/admin-jwt.strategy.js';
 import { getAdminJwtExpiresIn, getAdminJwtSecret } from './admin-jwt.config.js';
 
@@ -56,7 +57,7 @@ import { getAdminJwtExpiresIn, getAdminJwtSecret } from './admin-jwt.config.js';
       }),
     }),
   ],
-  controllers: [AdminAuthController],
+  controllers: [AdminAuthController, AdminAccessController],
   providers: [AdminAuthService, AdminJwtStrategy], 
   exports: [AdminAuthService, AdminJwtStrategy],
 })

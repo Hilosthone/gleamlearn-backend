@@ -44,12 +44,13 @@ import { AdminContentController } from '../content/admin-content.controller.js';
 import { AccountStatusService } from '../../auth/account-status.service.js';
 
 import { FeedbackController } from '../reports/feedback.controller.js';
+import { AdminAccessController } from './admin-access.controller.js';
 const ALL_ADMIN_CONTROLLERS = [
   ActivityController, AiModerationController, AnalyticsController, AuditController, AdminAuthController,
   CoursesController, DashboardController, AdminExportController, FinanceController, GamificationController,
   NotificationsController, QuestionsController, ReportsController, RolesController, SecurityController,
   SettingsController, SubscriptionsController, SystemController, AdminUsersController, AdminContentController,
-  FeedbackController,
+  FeedbackController, AdminAccessController,
 ];
 
 const PUBLIC_ADMIN_AUTH_ROUTES = new Set(['login', 'logout', 'refreshToken', 'forgotPassword', 'resetPassword']);
@@ -76,7 +77,7 @@ describe('every guarded admin route declares a permission (default deny)', () =>
       }
     }
     expect(missing).toEqual([]);
-    expect(guardedRoutes).toBe(122); // + GET /admin/feedback
+    expect(guardedRoutes).toBe(123); // + GET /admin/feedback, GET /admin/access
   });
 
   it('role grants are least-privilege', () => {
@@ -107,6 +108,7 @@ describe('HTTP: roles receive 403 for operations they are not granted', () => {
     save: vi.fn(async (u: any) => u),
     remove: vi.fn(async (u: any) => u),
     findAndCount: vi.fn(async () => [[target], 1]),
+    manager: { query: vi.fn(async () => []) },
   };
   const actionRepo = { create: vi.fn((x: any) => x), save: vi.fn(async (x: any) => x), find: vi.fn(async () => []) };
   const dashboard = {
@@ -235,6 +237,9 @@ describe('HTTP: roles receive 403 for operations they are not granted', () => {
     expect(res.status).toBe(200);
     expect(res.body.data).toEqual({ userId: USER_ID, isRestricted: true });
     expect(actionRepo.save).toHaveBeenCalledWith(expect.objectContaining({ actionType: 'SUSPEND' }));
+    // also written to the audit log, attributed to the acting admin
+    const audit = userRepo.manager.query.mock.calls.find((c: any[]) => /admin_activity_logs/.test(c[0]));
+    expect(audit?.[1]).toEqual([expect.any(String), USER_ID, 'SUSPEND', `User: ${USER_ID}`]);
     const off = await http().patch(`/api/v1/admin/users/${USER_ID}/unsuspend`).set(as(AdminRole.SUPPORT_ADMIN));
     expect(off.body.data.isRestricted).toBe(false);
   });

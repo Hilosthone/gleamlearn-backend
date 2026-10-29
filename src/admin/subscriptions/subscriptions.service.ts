@@ -1,3 +1,4 @@
+import { featureUnavailable } from '../../common/errors/feature-unavailable.js';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -41,24 +42,16 @@ export class SubscriptionsService {
     return { status: 'success', data: subscription };
   }
 
-  async update(id: string, dto: UpdateSubscriptionDto) {
-    const subscription = (await this.findOne(id)).data;
-    Object.assign(subscription, dto);
-    const updated = await this.subscriptionRepo.save(subscription);
-    return { status: 'success', message: 'Subscription updated successfully', data: updated };
+  async update(_id: string, _dto: UpdateSubscriptionDto): Promise<never> {
+    throw featureUnavailable('Subscription changes', 'there is no live subscription or payment provider, so nothing would actually change, be cancelled or be refunded');
   }
 
-  async cancel(id: string) {
-    const subscription = (await this.findOne(id)).data;
-    subscription.status = 'CANCELLED';
-    const updated = await this.subscriptionRepo.save(subscription);
-    return { status: 'success', message: 'Subscription cancelled successfully', data: updated };
+  async cancel(_id: string): Promise<never> {
+    throw featureUnavailable('Subscription cancellation', 'there is no live subscription or payment provider, so nothing would actually change, be cancelled or be refunded');
   }
 
-  async refund(id: string) {
-    const subscription = (await this.findOne(id)).data;
-    subscription.status = 'EXPIRED'; // Or mark as refunded depending on business logic
-    await this.subscriptionRepo.save(subscription);
-    return { status: 'success', message: `Subscription ${id} refunded and revoked successfully` };
+  async refund(_id: string): Promise<never> {
+    // it used to mark the record "EXPIRED" and answer "refunded" without any payment taking place
+    throw featureUnavailable('Refunds', 'there is no live subscription or payment provider, so nothing would actually change, be cancelled or be refunded');
   }
 }

@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsUUID } from 'class-validator';
+import { IsString, IsNotEmpty, IsUUID, MaxLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateNotificationDto {
@@ -10,10 +10,12 @@ export class CreateNotificationDto {
   @ApiProperty({ example: 'Important Update regarding your course', description: 'Notification title' })
   @IsString()
   @IsNotEmpty()
+  @MaxLength(150)
   title: string;
 
   @ApiProperty({ example: 'Your scholarship application has been reviewed.', description: 'Notification message body' })
   @IsString()
   @IsNotEmpty()
+  @MaxLength(2000)
   message: string;
 }

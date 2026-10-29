@@ -1,15 +1,17 @@
-import { IsString, IsNotEmpty, IsIn, IsOptional } from 'class-validator';
+import { IsString, IsNotEmpty, IsIn, IsOptional, MaxLength } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class BroadcastNotificationDto {
   @ApiProperty({ example: 'Platform Maintenance Notice', description: 'Broadcast title' })
   @IsString()
   @IsNotEmpty()
+  @MaxLength(150)
   title: string;
 
   @ApiProperty({ example: 'The system will undergo scheduled maintenance tonight at 12 AM.', description: 'Broadcast message' })
   @IsString()
   @IsNotEmpty()
+  @MaxLength(2000)
   message: string;
 
   @ApiProperty({

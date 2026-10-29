@@ -1,3 +1,4 @@
+import { featureUnavailable } from '../../common/errors/feature-unavailable.js';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -59,7 +60,10 @@ export class AdminExportService {
           if (val === null || val === undefined) val = '';
           if (typeof val === 'object') val = JSON.stringify(val);
           // Escape quotes and commas
-          const stringVal = String(val).replace(/"/g, '""');
+          // a learner-chosen name such as =HYPERLINK(...) must not run as a formula in a spreadsheet
+          const raw = String(val);
+          const safe = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
+          const stringVal = safe.replace(/"/g, '""');
           return `"${stringVal}"`;
         })
         .join(','),
@@ -100,13 +104,8 @@ export class AdminExportService {
     return this.sendResponse(res, analyticsData, 'analytics-export', format);
   }
 
-  async exportTransactions(format: ExportFormat, res: Response) {
-    // Placeholder for transaction logs (wire up your transaction repository here if available)
-    const mockTransactions = [
-      { transactionId: 'txn_001', user: 'johndoe', amount: 5000, currency: 'NGN', status: 'SUCCESS', date: new Date().toISOString() },
-      { transactionId: 'txn_002', user: 'janedoe', amount: 12000, currency: 'NGN', status: 'SUCCESS', date: new Date().toISOString() },
-    ];
-    return this.sendResponse(res, mockTransactions, 'transactions-export', format);
+  async exportTransactions(_format: ExportFormat, _res: Response): Promise<never> {
+    throw featureUnavailable('Transactions export', 'payments are not live (this export used to return two made-up transactions)');
   }
 
   async exportActivity(format: ExportFormat, res: Response) {

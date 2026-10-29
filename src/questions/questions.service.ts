@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Question } from './entities/question.entity.js';
 import { CreateQuestionDto, UpdateQuestionDto, QueryQuestionsDto } from './dto/question.dto.js';
+import { stripProtectedFields } from '../common/utils/strip-protected.js';
 
 @Injectable()
 export class QuestionsService {
@@ -13,7 +14,7 @@ export class QuestionsService {
   ) {}
 
   async create(createDto: CreateQuestionDto): Promise<Question> {
-    const question = this.questionRepository.create(createDto);
+    const question = this.questionRepository.create(stripProtectedFields(createDto));
     return await this.questionRepository.save(question);
   }
 
@@ -48,6 +49,19 @@ export class QuestionsService {
     return await query.getMany();
   }
 
+/** The admin console's view of the shared bank: newest first, searchable, paginated. */
+  async adminList(q: { search?: string; subject?: string; examination?: string; page?: unknown; limit?: unknown }) {
+    const page = Math.max(1, Number.parseInt(String(q.page ?? '1'), 10) || 1);
+    const limit = Math.min(100, Math.max(1, Number.parseInt(String(q.limit ?? '20'), 10) || 20));
+    const query = this.questionRepository.createQueryBuilder('question').orderBy('question.createdAt', 'DESC').skip((page - 1) * limit).take(limit);
+    const search = typeof q.search === 'string' ? q.search.trim().slice(0, 200) : '';
+    if (search) query.andWhere('(question.questionText ILIKE :s OR question.topic ILIKE :s OR question.subject ILIKE :s)', { s: `%${search}%` });
+    if (typeof q.subject === 'string' && q.subject.trim()) query.andWhere('question.subject ILIKE :subject', { subject: `%${q.subject.trim()}%` });
+    if (typeof q.examination === 'string' && q.examination.trim()) query.andWhere('question.examination ILIKE :exam', { exam: `%${q.examination.trim()}%` });
+    const [questions, total] = await query.getManyAndCount();
+    return { status: 'success', data: { questions, pagination: { total, page, limit, totalPages: Math.ceil(total / limit) } } };
+  }
+
   async findOne(id: string): Promise<Question> {
     const question = await this.questionRepository.findOne({ where: { id } });
     if (!question) {
@@ -58,7 +72,8 @@ export class QuestionsService {
 
   async update(id: string, updateDto: UpdateQuestionDto): Promise<Question> {
     await this.findOne(id);
-    await this.questionRepository.update(id, updateDto);
+    // bodies are not whitelisted globally: an `id` in the body must not rewrite the primary key
+    await this.questionRepository.update(id, stripProtectedFields(updateDto) as UpdateQuestionDto);
     return await this.findOne(id);
   }
 

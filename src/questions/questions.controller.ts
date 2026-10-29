@@ -41,6 +41,14 @@ export class QuestionsController {
     return this.questionsService.findAll(queryDto);
   }
 
+  /** The admin console's question bank (the same table learners practise from). Declared before ':id'. */
+  @AdminOnly(AdminPermission.CONTENT_MANAGE)
+  @Get('manage/all')
+  @ApiOperation({ summary: 'Admin: search the shared question bank (paginated)' })
+  adminList(@Query() q: { search?: string; subject?: string; examination?: string; page?: string; limit?: string }) {
+    return this.questionsService.adminList(q);
+  }
+
   @UseGuards(JwtAuthGuard)
   @Get(':id')
   @ApiOperation({ 

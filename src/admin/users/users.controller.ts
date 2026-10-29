@@ -1,5 +1,5 @@
 // src/admin/users/users.controller.ts
-import { Controller, Get, Patch, Delete, Param, Query, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Patch, Delete, Param, Query, Body, UseGuards, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
 import { AdminUsersService } from './users.service.js';
 import { AdminUsersQueryDto } from './dto/admin-users-query.dto.js';
@@ -68,16 +68,16 @@ export class AdminUsersController {
   @Patch(':id/suspend')
   @ApiOperation({ summary: 'Suspend a user account' })
   @ApiResponse({ status: 200, description: 'User suspended successfully.' })
-  suspendUser(@Param('id') id: string) {
-    return this.usersService.suspendUser(id);
+  suspendUser(@Param('id') id: string, @Req() req: any) {
+    return this.usersService.suspendUser(id, req.user?.id);
   }
 
   @RequireAdminPermission(AdminPermission.USERS_MANAGE)
   @Patch(':id/unsuspend')
   @ApiOperation({ summary: 'Unsuspend a user account' })
   @ApiResponse({ status: 200, description: 'User unsuspended successfully.' })
-  unsuspendUser(@Param('id') id: string) {
-    return this.usersService.unsuspendUser(id);
+  unsuspendUser(@Param('id') id: string, @Req() req: any) {
+    return this.usersService.unsuspendUser(id, req.user?.id);
   }
 
   @RequireAdminPermission(AdminPermission.USERS_MANAGE)
@@ -110,23 +110,23 @@ export class AdminUsersController {
   @Patch(':id/reset-password')
   @ApiOperation({ summary: 'Manually reset user password as an admin' })
   @ApiResponse({ status: 200, description: 'User password reset successfully.' })
-  resetPassword(@Param('id') id: string, @Body() dto: AdminResetPasswordDto) {
-    return this.usersService.resetPassword(id, dto);
+  resetPassword(@Param('id') id: string, @Body() dto: AdminResetPasswordDto, @Req() req: any) {
+    return this.usersService.resetPassword(id, dto, req.user?.id);
   }
 
   @RequireAdminPermission(AdminPermission.USERS_MANAGE)
   @Patch(':id/verify')
   @ApiOperation({ summary: 'Manually mark a user account as verified' })
   @ApiResponse({ status: 200, description: 'User verified successfully.' })
-  verifyUser(@Param('id') id: string) {
-    return this.usersService.verifyUser(id);
+  verifyUser(@Param('id') id: string, @Req() req: any) {
+    return this.usersService.verifyUser(id, req.user?.id);
   }
 
   @RequireAdminPermission(AdminPermission.USERS_MANAGE)
   @Patch(':id/unverify')
   @ApiOperation({ summary: 'Revoke user account verification status' })
   @ApiResponse({ status: 200, description: 'User unverified successfully.' })
-  unverifyUser(@Param('id') id: string) {
-    return this.usersService.unverifyUser(id);
+  unverifyUser(@Param('id') id: string, @Req() req: any) {
+    return this.usersService.unverifyUser(id, req.user?.id);
   }
 }
