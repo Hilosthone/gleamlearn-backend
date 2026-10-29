@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { typeOrmConnectionConfig } from './connection-config.js';
 // the migration runner is plain Node (no build); these tests keep it consistent with the API's configuration
+// @ts-ignore-next-line
 import { MigrationError, TARGET_VARS, confirmationFor, describeTarget, loadEnvironment, resolveTarget } from '../../scripts/db/migrator.mjs';
 
 const getter = (env: Record<string, string | undefined>) => (name: string) => env[name];

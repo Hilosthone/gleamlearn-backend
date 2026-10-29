@@ -11,6 +11,8 @@ import { featureUnavailable } from '../common/errors/feature-unavailable.js';
 /** Profile field each named leaderboard scope compares against (case-insensitive, trimmed). */
 const SCOPE_FIELD = { school: 'secondarySchool', university: 'university', department: 'department' } as const;
 type NamedScope = keyof typeof SCOPE_FIELD;
+/** profile columns a board may be filtered by (interpolated into SQL, so never caller-supplied) */
+const FILTER_COLUMNS = new Set(['country', 'secondarySchool', 'university', 'department']);
 const same = (a: unknown, b: unknown) => typeof a === 'string' && typeof b === 'string' && a.trim() !== '' && a.trim().toLowerCase() === b.trim().toLowerCase();
 
 @Injectable()
@@ -31,7 +33,20 @@ export class LeaderboardsService {
       .addSelect('SUM(tx.amount)', 'totalXp');
 
     if (startDate) {
-      query.where('tx.createdAt >= :startDate', { startDate });
+      query.andWhere('tx.createdAt >= :startDate', { startDate });
+    }
+    // Filters apply BEFORE the top 50 is taken. They used to be applied afterwards, to the global top 50, so a
+    // learner outside it never appeared on their own school, university, department, country or course board.
+    if (filterColumn) {
+      if (!FILTER_COLUMNS.has(filterColumn)) throw new Error(`Unsupported leaderboard filter ${filterColumn}`);
+      if (typeof filterValue !== 'string' || !filterValue.trim()) return [];
+      query
+        .innerJoin(User, 'u', 'u.id = tx.userId')
+        .andWhere(`LOWER(TRIM(u.${filterColumn})) = LOWER(TRIM(:filterValue))`, { filterValue });
+    }
+    if (onlyUserIds) {
+      if (!onlyUserIds.size) return [];
+      query.andWhere('tx.userId IN (:...onlyUserIds)', { onlyUserIds: [...onlyUserIds] });
     }
 
     query.groupBy('tx.userId').orderBy('totalXp', 'DESC').limit(50);

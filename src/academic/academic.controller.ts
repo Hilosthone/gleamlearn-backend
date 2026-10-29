@@ -218,6 +218,15 @@ export class AcademicController {
     return this.academicService.findAllInstitutions();
   }
 
+  /** The same directory for the admin console (admin and learner tokens are separate, so GET /institutions is closed to admins). */
+  @AdminOnly(AdminPermission.CONTENT_MANAGE)
+  @Get('admin/institutions')
+  @ApiOperation({ summary: 'Admin: all institutions with faculties and departments' })
+  @ApiResponse({ status: 200, description: 'List of institutions retrieved successfully.' })
+  adminInstitutions() {
+    return this.academicService.findAllInstitutions();
+  }
+
   @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 10, ttl: 60000 } })
   @AdminOnly(AdminPermission.CONTENT_MANAGE)
   @Post('institutions')

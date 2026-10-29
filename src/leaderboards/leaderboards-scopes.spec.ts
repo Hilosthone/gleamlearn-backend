@@ -6,7 +6,7 @@ const users = [
   { id: 'u3', firstName: 'Chi', secondarySchool: null, university: null, department: null },
 ];
 function make(enrollments: { courseId: string; userId: string }[] = []) {
-  const qb: any = { select: () => qb, addSelect: () => qb, where: () => qb, groupBy: () => qb, orderBy: () => qb, limit: () => qb, getRawMany: async () => [{ userId: 'u1', totalXp: '90' }, { userId: 'u2', totalXp: '50' }, { userId: 'u3', totalXp: '10' }] };
+  const qb: any = { select: () => qb, addSelect: () => qb, where: () => qb, andWhere: () => qb, innerJoin: () => qb, groupBy: () => qb, orderBy: () => qb, limit: () => qb, getRawMany: async () => [{ userId: 'u1', totalXp: '90' }, { userId: 'u2', totalXp: '50' }, { userId: 'u3', totalXp: '10' }] };
   const userRepo = {
     findOne: async ({ where }: any) => users.find((u) => u.id === where.id) ?? null,
     manager: { getRepository: () => ({ find: async ({ where }: any) => enrollments.filter((e) => e.courseId === where.courseId) }) },

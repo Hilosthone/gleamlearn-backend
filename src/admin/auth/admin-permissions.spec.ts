@@ -43,11 +43,13 @@ import { SystemController } from '../system/system.controller.js';
 import { AdminContentController } from '../content/admin-content.controller.js';
 import { AccountStatusService } from '../../auth/account-status.service.js';
 
+import { FeedbackController } from '../reports/feedback.controller.js';
 const ALL_ADMIN_CONTROLLERS = [
   ActivityController, AiModerationController, AnalyticsController, AuditController, AdminAuthController,
   CoursesController, DashboardController, AdminExportController, FinanceController, GamificationController,
   NotificationsController, QuestionsController, ReportsController, RolesController, SecurityController,
   SettingsController, SubscriptionsController, SystemController, AdminUsersController, AdminContentController,
+  FeedbackController,
 ];
 
 const PUBLIC_ADMIN_AUTH_ROUTES = new Set(['login', 'logout', 'refreshToken', 'forgotPassword', 'resetPassword']);
@@ -74,7 +76,7 @@ describe('every guarded admin route declares a permission (default deny)', () =>
       }
     }
     expect(missing).toEqual([]);
-    expect(guardedRoutes).toBe(121);
+    expect(guardedRoutes).toBe(122); // + GET /admin/feedback
   });
 
   it('role grants are least-privilege', () => {

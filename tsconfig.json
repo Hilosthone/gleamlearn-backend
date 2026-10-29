@@ -70,6 +70,7 @@
     "strict": true,
     "strictPropertyInitialization": false,
     "ignoreDeprecations": "6.0",
+    "types": ["vitest/globals", "node"],
     "paths": {
       "@prisma/client": ["./prisma/schema.d.ts"]
     }

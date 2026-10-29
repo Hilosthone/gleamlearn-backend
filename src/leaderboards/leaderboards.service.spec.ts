@@ -5,7 +5,7 @@ const active = { exists: true, restricted: false, restrictionReason: null, froze
 
 function build(xpRows: Array<{ userId: string; totalXp: string }>, users: Record<string, Record<string, unknown>>, statusById: Record<string, Partial<typeof active>> = {}) {
   const qb = fakeQueryBuilder('tx', {});
-  Object.assign(qb, { addSelect: () => qb, groupBy: () => qb, limit: () => qb, getRawMany: async () => xpRows });
+  Object.assign(qb, { andWhere: () => qb, innerJoin: () => qb, addSelect: () => qb, groupBy: () => qb, limit: () => qb, getRawMany: async () => xpRows });
   const xpRepo = { createQueryBuilder: () => qb };
   const userRepo = { findOne: vi.fn(async ({ where }: any) => users[where.id] ?? null) };
   const accountStatus = { getStatus: vi.fn(async (id: string) => ({ ...active, ...statusById[id] })) };
