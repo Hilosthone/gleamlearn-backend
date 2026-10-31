@@ -1,5 +1,7 @@
 // src/common/ai-service/ai-error.ts
 import { HttpException, HttpStatus, Logger } from '@nestjs/common';
+import { callInfo, failureCategory } from './ai-http.client.js';
+import { currentRequestId } from '../request-context.js';
 
 const logger = new Logger('AiServiceClient');
 
@@ -120,9 +122,10 @@ export function toAiHttpException(error: any, operation: string): HttpException 
     result = aiError(503, AI_ERROR_CODES.unavailable, 'The AI service is currently unavailable. Please try again later.');
   }
 
+  const call = callInfo(error?.config);
   logger.warn(
-    `${operation} failed: upstreamStatus=${status ?? 'none'} upstreamCode=${upstreamCode ?? 'none'} code=${code ?? 'none'} ` +
-      `returned=${result.getStatus()} detail=${describe(detail ?? error?.message)}`,
+    `${operation} failed: id=${call.id ?? currentRequestId() ?? '-'} upstreamStatus=${status ?? 'none'} upstreamCode=${upstreamCode ?? 'none'} code=${code ?? 'none'} ` +
+      `category=${failureCategory(error)} returned=${result.getStatus()} ms=${call.ms ?? '-'} detail=${describe(detail ?? error?.message)}`,
   );
 
   return result;
