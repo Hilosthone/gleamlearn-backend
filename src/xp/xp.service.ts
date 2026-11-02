@@ -1,7 +1,7 @@
 // src/xp/xp.service.ts
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Like, Repository } from 'typeorm';
+import { EntityManager, Like, Repository } from 'typeorm';
 import { XpTransaction } from './entities/xp-transaction.entity.js';
 import { User } from '../auth/entities/user.entity.js';
 
@@ -47,15 +47,17 @@ export class XpService {
   }
 
   // Automatically award XP after a valid activity (e.g., Quiz Completed)
-  async awardXp(userId: string, amount: number, source: string, description: string) {
-    const transaction = this.xpRepo.create({
+  // `manager`: write inside a caller's transaction (e.g. with the engagement reward record), so both commit or neither
+  async awardXp(userId: string, amount: number, source: string, description: string, manager?: EntityManager) {
+    const repo = manager ? manager.getRepository(XpTransaction) : this.xpRepo;
+    const transaction = repo.create({
       userId,
       amount,
       source,
       description,
     });
 
-    return await this.xpRepo.save(transaction);
+    return await repo.save(transaction);
   }
 
   // Check whether XP was already awarded for a specific reference (e.g., a quiz id embedded in the description)

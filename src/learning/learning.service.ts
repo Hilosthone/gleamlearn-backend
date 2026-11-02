@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
+import { createHash } from 'node:crypto';
 import { DataSource, Repository } from 'typeorm';
 import { getAiHttpClient } from '../common/ai-service/ai-http.client.js';
 import { toAiHttpException } from '../common/ai-service/ai-error.js';
@@ -56,6 +57,25 @@ interface Source {
   personalCourseId: string | null;
   moduleId: string | null;
   youtubeSessionId: string | null;
+  /** An earlier condensed version of this exact text, kept so long material is not condensed again. */
+  condensed?: CondensedSource | null;
+}
+
+/** What the AI service returns as condensedSource (and accepts back as condensed). */
+export interface CondensedSource {
+  text: string;
+  chars: number;
+  truncated: boolean;
+}
+
+/** The condensed version is reused only for the transcript it was made from. */
+export const transcriptHash = (text: string) => createHash('sha256').update(text).digest('hex');
+
+/** The cached condensed transcript in a YouTube session's structuredMaterial, if it still matches the transcript. */
+export function cachedCondensed(structured: unknown, transcript: string): CondensedSource | null {
+  const c = (structured as { condensed?: { hash?: unknown; text?: unknown; chars?: unknown; truncated?: unknown } } | null)?.condensed;
+  if (!c || c.hash !== transcriptHash(transcript) || typeof c.text !== 'string' || !c.text.trim()) return null;
+  return { text: c.text, chars: Number(c.chars) || transcript.length, truncated: c.truncated === true };
 }
 
 const FEATURE = 'Learning from your material';
@@ -162,7 +182,14 @@ export class LearningService {
         if (!y) throw new NotFoundException('YouTube session not found.');
         if (!y.rawTranscript?.trim()) throw new ConflictException('This video has no transcript yet. Paste the transcript or your notes in the session first.');
         const course = (y.structuredMaterial as { session?: { personalCourseId?: string } } | null)?.session?.personalCourseId ?? null;
-        return { ...base, title: y.title || 'YouTube lesson', text: y.rawTranscript, youtubeSessionId: y.id, personalCourseId: input.personalCourseId ?? course };
+        return {
+          ...base,
+          title: y.title || 'YouTube lesson',
+          text: y.rawTranscript,
+          youtubeSessionId: y.id,
+          personalCourseId: input.personalCourseId ?? course,
+          condensed: cachedCondensed(y.structuredMaterial, y.rawTranscript),
+        };
       }
       default:
         throw new BadRequestException('Unknown source.');
@@ -192,6 +219,25 @@ export class LearningService {
     return { type: 'resource', id: r.id, resourceId: r.id, kind, title: r.title, reused: true };
   }
 
+  /**
+   * Keeps the condensed transcript the AI service just made, so the next kind for this video skips condensing.
+   * Only merged into structuredMaterial.condensed (other keys untouched); a failure here never fails the generation.
+   */
+  private async keepCondensed(userId: string, sessionId: string, transcript: string, condensed: unknown) {
+    const c = condensed as Partial<CondensedSource> | undefined;
+    if (!c || typeof c.text !== 'string' || !c.text.trim()) return;
+    const value = { hash: transcriptHash(transcript), text: c.text.slice(0, MAX_SOURCE_CHARS), chars: Number(c.chars) || transcript.length, truncated: c.truncated === true, at: new Date().toISOString() };
+    try {
+      await this.dataSource.query(
+        `UPDATE "youtube_resources" SET "structuredMaterial" = COALESCE("structuredMaterial", '{}'::jsonb) || jsonb_build_object('condensed', $3::jsonb)
+         WHERE "id" = $1 AND "userId" = $2`,
+        [sessionId, userId, JSON.stringify(value)],
+      );
+    } catch (err) {
+      this.logger.warn(`condensed transcript not kept for ${sessionId}: ${(err as Error).message}`);
+    }
+  }
+
   private async runGenerate(userId: string, input: GenerateInput): Promise<GenerateResult> {
     const already = await this.existing(userId, input.requestId, input.kind);
     if (already) return already; // a retry or second click: same result, no second AI call
@@ -216,12 +262,14 @@ export class LearningService {
         text: src.text,
         title: src.title.slice(0, 200),
         ...(input.sourceType === 'topic' ? { sourceMode: 'topic' } : {}),
+        ...(src.condensed ? { condensed: src.condensed } : {}),
         options: { count: options.count, difficulty: options.difficulty, level: options.level, examGoal: options.examGoal, objective: options.objective, subject: options.subject, focus: options.focus },
       });
       out = res.data ?? {};
     } catch (err) {
       throw toAiHttpException(err, `learning generate ${input.kind}`);
     }
+    if (input.sourceType === 'youtube' && src.youtubeSessionId) await this.keepCondensed(userId, src.youtubeSessionId, src.text, out.condensedSource);
     const links = { materialId: src.materialId, personalCourseId: src.personalCourseId, moduleId: src.moduleId, youtubeSessionId: src.youtubeSessionId };
     const truncated = out.truncated === true;
 

@@ -144,7 +144,7 @@
 
 
 // src/streak/streak.controller.ts
-import { Controller, Get, Post, Body, Request, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, Request, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { StreakService } from './streak.service.js';
@@ -185,8 +185,8 @@ export class StreakController {
     summary: 'Get calendar check-in map',
     description: 'Returns an array of dates when the student checked in, optimized for calendar grid UI widgets.'
   })
-  getStreakCalendar(@Request() req: any) {
-    return this.streakService.getStreakCalendar(req.user.userId);
+  getStreakCalendar(@Request() req: any, @Query('month') month?: string) {
+    return this.streakService.getStreakCalendar(req.user.userId, month);
   }
 
   @Throttle({ short: { limit: 1, ttl: 5000 }, long: { limit: 10, ttl: 60000 } })

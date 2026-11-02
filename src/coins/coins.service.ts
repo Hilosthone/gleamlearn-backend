@@ -1,7 +1,7 @@
 // src/coins/coins.service.ts
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { CoinTransaction } from './entities/coin-transaction.entity.js';
 
 @Injectable()
@@ -31,14 +31,16 @@ export class CoinsService {
   }
 
   // 3. Server-side authorized coin reward (Internal system use only)
-  async awardCoins(userId: string, amount: number, source: string, description: string) {
+  // `manager`: write inside a caller's transaction (e.g. with the engagement reward record), so both commit or neither
+  async awardCoins(userId: string, amount: number, source: string, description: string, manager?: EntityManager) {
     if (amount <= 0) {
       throw new HttpException('Coin reward amount must be greater than zero', HttpStatus.BAD_REQUEST);
     }
 
     // `type` is NOT NULL in coin_transactions (the admin finance entity on the same table declares it required);
     // without it every reward failed with a database error after the XP had already been awarded.
-    const transaction = this.coinRepo.create({
+    const repo = manager ? manager.getRepository(CoinTransaction) : this.coinRepo;
+    const transaction = repo.create({
       userId,
       amount, // Positive value
       type: 'EARN',
@@ -46,7 +48,7 @@ export class CoinsService {
       description,
     });
 
-    return await this.coinRepo.save(transaction);
+    return await repo.save(transaction);
   }
 
   // 4. Server-side authorized coin spending with balance check

@@ -1,4 +1,5 @@
-import { BadRequestException, Body, Controller, Delete, Get, Module, Param, ParseUUIDPipe, Patch, Post, Put, Query, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Module, Param, ParseUUIDPipe, Patch, Post, Put, Query, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Throttle } from '@nestjs/throttler';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
@@ -65,6 +66,13 @@ export class CreateYoutubeSessionDto {
 export class TranscriptDto {
   @IsString() @MinLength(1) @MaxLength(200000) text: string;
 }
+
+/** Multipart field next to the caption `file`: its format when the file name does not say. */
+export class CaptionsDto {
+  @IsOptional() @IsIn(['vtt', 'srt']) format?: 'vtt' | 'srt';
+}
+
+const CAPTION_MAX_BYTES = 2 * 1024 * 1024;
 
 export class AskDto {
   @IsString() @MinLength(1) @MaxLength(2000) question: string;
@@ -219,6 +227,20 @@ export class YoutubeSessionsController {
   @Put(':id/transcript')
   setTranscript(@CurrentUser('id') userId: string, @Param('id', ParseUUIDPipe) id: string, @Body() dto: TranscriptDto) {
     return this.sessions.setTranscript(userId, id, dto.text);
+  }
+
+  @Throttle({ short: { limit: 1, ttl: 3000 }, long: { limit: 10, ttl: 60000 } })
+  @Post(':id/transcript/captions')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: CAPTION_MAX_BYTES, files: 1 } }))
+  setCaptions(
+    @CurrentUser('id') userId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @UploadedFile() file: { buffer?: Buffer; originalname?: string } | undefined,
+    @Body() dto: CaptionsDto,
+  ) {
+    if (!file?.buffer?.length) throw new BadRequestException('Choose a caption file (.vtt or .srt) to upload.');
+    const ext = (file.originalname ?? '').toLowerCase().match(/\.(vtt|srt)$/)?.[1];
+    return this.sessions.setCaptions(userId, id, file.buffer.toString('utf8'), dto.format ?? ext);
   }
 
   @Throttle({ short: { limit: 1, ttl: 5000 }, long: { limit: 6, ttl: 60000 } })

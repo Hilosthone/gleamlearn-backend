@@ -124,16 +124,11 @@ describe('StreakService status, check-in and recovery', () => {
     expect(t.row.lastCheckInDate).toBe(today);
   });
 
-  it('recovery is refused while the streak is still alive (no wasted token)', async () => {
-    const t = fakeRepos({ currentStreak: 3, longestStreak: 3, lastCheckInDate: '2026-10-25' });
-    await expect(t.service.recoverStreak('u1', undefined, day('2026-10-26'))).rejects.toThrow('not broken');
-    expect(t.row.recoveryTokens).toBe(1);
-  });
-
-  it('recovery bridges a broken streak', async () => {
+  // Recovery now runs in a locked database transaction (streak-recovery.spec.ts covers the rules; the live suite
+  // test/live/engagement-streaks.mjs covers the transaction against PostgreSQL). Without the recovery table it is off.
+  it('recovery is unavailable when the recovery records are not configured', async () => {
     const t = fakeRepos({ currentStreak: 3, longestStreak: 3, lastCheckInDate: '2026-10-22' });
-    await t.service.recoverStreak('u1', undefined, day('2026-10-26'));
-    expect(t.row).toMatchObject({ lastCheckInDate: '2026-10-25', currentStreak: 3, recoveryTokens: 0 });
+    await expect(t.service.recoverStreak('u1', undefined, day('2026-10-26'))).rejects.toThrow('not available');
   });
 });
 

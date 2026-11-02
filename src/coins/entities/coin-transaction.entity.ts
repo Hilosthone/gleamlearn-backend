@@ -44,7 +44,9 @@ export class CoinTransaction {
   @JoinColumn({ name: 'user_id' })
   user: User;
 
-  @Column({ type: 'int' })
+  // The database column is numeric, which PostgreSQL returns as a string: without this, adding amounts
+  // concatenated them ("0" + "5.00" → "05.00") and coin balances read wrongly. No schema change.
+  @Column({ type: 'int', transformer: { to: (v: number) => v, from: (v: string | number | null) => (v === null || v === undefined ? 0 : Number(v)) } })
   amount: number; // Positive for earnings, negative for spending
 
   @Column({ type: 'varchar', nullable: true })
